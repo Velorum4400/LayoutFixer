@@ -8,13 +8,11 @@ namespace LayoutFixer;
 public sealed class SettingsForm : Form
 {
     private readonly AppSettings _settings;
-
     private GradientHeaderPanel _header = null!;
     private Panel _content = null!;
     private Panel _footer = null!;
     private CardPanel _correctionCard = null!;
     private CardPanel _preferencesCard = null!;
-
     private PictureBox _logo = null!;
     private Label _title = null!;
     private Label _tagline = null!;
@@ -22,7 +20,6 @@ public sealed class SettingsForm : Form
     private Label _correctionTitle = null!;
     private Label _preferencesTitle = null!;
     private Label _installedTitle = null!;
-
     private ComboBox _language = null!;
     private CheckBox _startup = null!;
     private CheckBox _full = null!;
@@ -30,7 +27,6 @@ public sealed class SettingsForm : Form
     private CheckBox _keepSelection = null!;
     private ModernButton _fullHotkey = null!;
     private ModernButton _wordHotkey = null!;
-
     private SelectableLabel _languageLabel = null!;
     private SelectableLabel _fullLabel = null!;
     private SelectableLabel _wordLabel = null!;
@@ -38,7 +34,6 @@ public sealed class SettingsForm : Form
     private SelectableLabel _hotkeyHelp = null!;
     private SelectableLabel _info = null!;
     private SelectableLabel _availableLayouts = null!;
-
     private ModernButton _changelog = null!;
     private ModernButton _clearLog = null!;
     private ModernButton _save = null!;
@@ -49,19 +44,17 @@ public sealed class SettingsForm : Form
     {
         _settings = settings;
         UiText.Language = _settings.Language;
-
         Text = AppInfo.DisplayName;
         Icon = AppAssets.GetIcon();
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(1500, 790);
-        MinimumSize = new Size(1500, 780);
+        ClientSize = new Size(1650, 790);
+        MinimumSize = new Size(1650, 780);
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = true;
         MinimizeBox = true;
         AutoScaleMode = AutoScaleMode.Dpi;
         BackColor = Color.FromArgb(243, 247, 252);
         Font = new Font("Segoe UI", 10F);
-
         Build();
         ApplyLanguage();
         ResizeLayout();
@@ -76,7 +69,6 @@ public sealed class SettingsForm : Form
         _tagline = new Label { Left = 154, Top = 88, Width = 650, Height = 40, Text = "Type in the right language", Font = new Font("Segoe UI", 13F), ForeColor = Color.FromArgb(215, 230, 250), BackColor = Color.Transparent, TextAlign = ContentAlignment.MiddleLeft, RightToLeft = RightToLeft.No };
         _versionBadge = new Label { Width = 112, Height = 42, Top = 49, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI", 12F, FontStyle.Bold), ForeColor = Color.White, BackColor = Color.FromArgb(20, 112, 235), RightToLeft = RightToLeft.No };
         _header.Controls.AddRange(new Control[] { _logo, _title, _tagline, _versionBadge });
-
         _content = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(243, 247, 252), Padding = new Padding(24, 24, 24, 16) };
         _correctionCard = new CardPanel();
         _preferencesCard = new CardPanel();
@@ -84,7 +76,6 @@ public sealed class SettingsForm : Form
         BuildPreferencesCard();
         _content.Controls.Add(_correctionCard);
         _content.Controls.Add(_preferencesCard);
-
         _footer = new Panel { Dock = DockStyle.Bottom, Height = 88, BackColor = Color.White, Padding = new Padding(24, 18, 24, 18) };
         _footer.Paint += (_, e) => { using var pen = new Pen(Color.FromArgb(222, 228, 237)); e.Graphics.DrawLine(pen, 0, 0, _footer.Width, 0); };
         _defaults = new ModernButton { Width = 200, Height = 46, Primary = false };
@@ -158,7 +149,6 @@ public sealed class SettingsForm : Form
         int gap = 20;
         int rightWidth = Math.Max(350, (int)(areaWidth * 0.37));
         int leftWidth = areaWidth - rightWidth - gap;
-
         if (leftWidth < 520)
         {
             leftWidth = areaWidth; rightWidth = areaWidth;
@@ -174,7 +164,6 @@ public sealed class SettingsForm : Form
             _correctionCard.SetBounds(leftX, _content.Padding.Top, leftWidth, areaHeight);
             _preferencesCard.SetBounds(rightX, _content.Padding.Top, rightWidth, areaHeight);
         }
-
         int hotkeyWidth = 180;
         int textWidth = Math.Max(300, _correctionCard.ClientSize.Width - hotkeyWidth - 115);
         if (UiText.IsRtl)
@@ -208,7 +197,6 @@ public sealed class SettingsForm : Form
             _hotkeyHelp.Left = 28;
             _hotkeyHelp.Width = Math.Max(300, _correctionCard.ClientSize.Width - 56);
         }
-
         _language.Width = Math.Max(220, _preferencesCard.ClientSize.Width - 56);
         _startup.Width = Math.Max(220, _preferencesCard.ClientSize.Width - 56);
         _installedTitle.Width = Math.Max(220, _preferencesCard.ClientSize.Width - 56);
@@ -250,7 +238,6 @@ public sealed class SettingsForm : Form
         _versionBadge.RightToLeft = RightToLeft.No;
         _title.TextAlign = ContentAlignment.MiddleLeft;
         _tagline.TextAlign = ContentAlignment.MiddleLeft;
-
         Text = $"{AppInfo.DisplayName} — {UiText.Get("settings")}";
         _tagline.Text = "Type in the right language";
         _versionBadge.Text = $"v{AppInfo.Version}";
@@ -271,9 +258,8 @@ public sealed class SettingsForm : Form
         _save.Text = UiText.Get("save");
 
         RightToLeft textDirection = rtl ? RightToLeft.Yes : RightToLeft.No;
-        HorizontalAlignment textAlignment = HorizontalAlignment.Left;
-        ContentAlignment labelAlignment = ContentAlignment.MiddleLeft;
-
+        HorizontalAlignment textAlignment = rtl ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+        ContentAlignment labelAlignment = rtl ? ContentAlignment.MiddleRight : ContentAlignment.MiddleLeft;
         _correctionTitle.RightToLeft = textDirection; _correctionTitle.TextAlign = labelAlignment;
         _preferencesTitle.RightToLeft = textDirection; _preferencesTitle.TextAlign = labelAlignment;
         _installedTitle.RightToLeft = textDirection; _installedTitle.TextAlign = labelAlignment;
