@@ -50,8 +50,8 @@ public sealed class SettingsForm : Form
         Text = AppInfo.DisplayName;
         Icon = AppAssets.GetIcon();
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(1180, 735);
-        MinimumSize = new Size(1050, 680);
+        ClientSize = new Size(1180, 760);
+        MinimumSize = new Size(1050, 710);
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = true;
         MinimizeBox = true;
@@ -71,7 +71,7 @@ public sealed class SettingsForm : Form
         _header = new GradientHeaderPanel
         {
             Dock = DockStyle.Top,
-            Height = 148
+            Height = 156
         };
 
         _logo = new PictureBox
@@ -88,31 +88,33 @@ public sealed class SettingsForm : Form
         _title = new Label
         {
             Left = 151,
-            Top = 30,
+            Top = 24,
             Width = 650,
-            Height = 48,
+            Height = 60,
             Text = "LayoutFixer",
             Font = new Font("Segoe UI", 26F, FontStyle.Bold),
             ForeColor = Color.White,
-            BackColor = Color.Transparent
+            BackColor = Color.Transparent,
+            TextAlign = ContentAlignment.MiddleLeft
         };
 
         _tagline = new Label
         {
             Left = 154,
-            Top = 82,
+            Top = 84,
             Width = 650,
-            Height = 34,
+            Height = 40,
             Font = new Font("Segoe UI", 13F, FontStyle.Regular),
             ForeColor = Color.FromArgb(215, 230, 250),
-            BackColor = Color.Transparent
+            BackColor = Color.Transparent,
+            TextAlign = ContentAlignment.MiddleLeft
         };
 
         _versionBadge = new Label
         {
             Width = 112,
             Height = 42,
-            Top = 46,
+            Top = 49,
             TextAlign = ContentAlignment.MiddleCenter,
             Font = new Font("Segoe UI", 12F, FontStyle.Bold),
             ForeColor = Color.White,
@@ -185,12 +187,13 @@ public sealed class SettingsForm : Form
         _correctionTitle = new Label
         {
             Left = 26,
-            Top = 22,
+            Top = 16,
             Width = 360,
-            Height = 34,
+            Height = 46,
             Font = new Font("Segoe UI", 16F, FontStyle.Bold),
             ForeColor = Color.FromArgb(22, 40, 70),
-            BackColor = Color.White
+            BackColor = Color.White,
+            TextAlign = ContentAlignment.MiddleLeft
         };
 
         _full = new CheckBox
@@ -221,7 +224,7 @@ public sealed class SettingsForm : Form
 
         _wordHotkey = MakeHotkeyButton(_settings.LastWordHotkey);
 
-        _hotkeyHelp = MakeSelectableLabel(28, 225, 500, 74);
+        _hotkeyHelp = MakeSelectableLabel(28, 225, 500, 82);
         _hotkeyHelp.Multiline = true;
         _hotkeyHelp.Font = new Font("Segoe UI", 9.5F);
         _hotkeyHelp.ForeColor = Color.FromArgb(88, 101, 122);
@@ -244,12 +247,13 @@ public sealed class SettingsForm : Form
         _preferencesTitle = new Label
         {
             Left = 26,
-            Top = 22,
+            Top = 16,
             Width = 310,
-            Height = 34,
+            Height = 46,
             Font = new Font("Segoe UI", 16F, FontStyle.Bold),
             ForeColor = Color.FromArgb(22, 40, 70),
-            BackColor = Color.White
+            BackColor = Color.White,
+            TextAlign = ContentAlignment.MiddleLeft
         };
 
         _languageLabel = MakeSelectableLabel(28, 78, 120, 30);
@@ -312,17 +316,18 @@ public sealed class SettingsForm : Form
             Left = 28,
             Top = 224,
             Width = 310,
-            Height = 26,
+            Height = 28,
             Font = new Font("Segoe UI", 10F, FontStyle.Bold),
             ForeColor = Color.FromArgb(40, 58, 86),
-            BackColor = Color.White
+            BackColor = Color.White,
+            TextAlign = ContentAlignment.MiddleLeft
         };
 
-        _availableLayouts = MakeSelectableLabel(28, 254, 310, 30);
+        _availableLayouts = MakeSelectableLabel(28, 256, 310, 32);
         _availableLayouts.ForeColor = Color.FromArgb(20, 112, 235);
         _availableLayouts.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
 
-        _info = MakeSelectableLabel(28, 302, 310, 95);
+        _info = MakeSelectableLabel(28, 300, 310, 118);
         _info.Multiline = true;
         _info.Font = new Font("Segoe UI", 9F);
         _info.ForeColor = Color.FromArgb(88, 101, 122);
@@ -367,7 +372,7 @@ public sealed class SettingsForm : Form
         {
             leftWidth = areaWidth;
             rightWidth = areaWidth;
-            int stackedHeight = Math.Max(330, (areaHeight - gap) / 2);
+            int stackedHeight = Math.Max(350, (areaHeight - gap) / 2);
 
             _correctionCard.SetBounds(
                 _content.Padding.Left,
@@ -419,7 +424,8 @@ public sealed class SettingsForm : Form
         _installedTitle.Width = Math.Max(220, _preferencesCard.ClientSize.Width - 56);
         _availableLayouts.Width = Math.Max(220, _preferencesCard.ClientSize.Width - 56);
         _info.Width = Math.Max(220, _preferencesCard.ClientSize.Width - 56);
-        _changelog.Top = Math.Max(408, _preferencesCard.ClientSize.Height - 66);
+        _info.Height = Math.Max(118, _preferencesCard.ClientSize.Height - 370);
+        _changelog.Top = Math.Max(430, _preferencesCard.ClientSize.Height - 66);
 
         _save.Left = _footer.ClientSize.Width - _footer.Padding.Right - _save.Width;
         _save.Top = 20;
