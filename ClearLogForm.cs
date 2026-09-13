@@ -99,12 +99,9 @@ public sealed class ClearLogForm : Form
     {
         try
         {
-            string directory = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "LayoutFixer");
-            Directory.CreateDirectory(directory);
+            Directory.CreateDirectory(AppRuntime.DataDirectory);
 
-            string diagnosticPath = Path.Combine(directory, "diagnostic.log");
+            string diagnosticPath = AppRuntime.GetDataPath("diagnostic.log");
             File.WriteAllText(diagnosticPath, string.Empty);
 
             ShowResult(UiText.Get("clear_log_success"), null, success: true);
@@ -141,12 +138,9 @@ public sealed class ClearLogForm : Form
     {
         try
         {
-            string directory = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "LayoutFixer");
-            Directory.CreateDirectory(directory);
+            Directory.CreateDirectory(AppRuntime.DataDirectory);
 
-            string errorPath = Path.Combine(directory, "error.log");
+            string errorPath = AppRuntime.GetDataPath("error.log");
             File.AppendAllText(
                 errorPath,
                 $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] Failed to clear diagnostic.log\r\n{ex}\r\n\r\n");
