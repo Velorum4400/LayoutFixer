@@ -42,6 +42,22 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.2.2", Array.Empty<string>(), new[]
+        {
+            T(
+                "Scanner correction is now scheduled after the low-level keyboard hook returns, preventing the original HID text from being appended after the corrected barcode.",
+                "Исправление сканера теперь запускается только после выхода из low-level keyboard hook, чтобы исходный HID-текст не допечатывался после исправленного штрихкода.",
+                "תיקון הסורק מתוזמן כעת לאחר היציאה מ-hook המקלדת כדי למנוע מהטקסט המקורי להתווסף אחרי הברקוד המתוקן."),
+            T(
+                "Changed the scanner drain delay to an asynchronous WinForms timer and added diagnostic messages for the post-hook replacement stage.",
+                "Задержка обработки сканера перенесена на асинхронный WinForms timer и добавлена диагностика этапа замены после hook.",
+                "השהיית הסורק הועברה לטיימר WinForms אסינכרוני ונוספה אבחנה לשלב ההחלפה לאחר ה-hook."),
+            T(
+                "Made the LayoutFixer brand label auto-sized and widened the Settings sidebar to prevent clipping at different DPI scales.",
+                "Название LayoutFixer теперь автоматически подбирает размер, а боковая панель настроек расширена для устранения обрезания при разных DPI.",
+                "תווית LayoutFixer כעת מותאמת אוטומטית והסרגל הצדדי הורחב כדי למנוע חיתוך ב-DPI שונה.")
+        });
+
         AddVersion("v1.2.1", Array.Empty<string>(), new[]
         {
             T(
