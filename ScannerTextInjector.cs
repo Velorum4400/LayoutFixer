@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Windows.Automation;
+using System.Windows.Automation.Text;
 using System.Windows.Forms;
 
 namespace LayoutFixer;
@@ -26,8 +28,158 @@ internal static class ScannerTextInjector
         }
 
         ScannerDiagnosticLog.Write(
-            $"Injection begin: text='{Sample(englishText)}', typedLength={typedLength}, suffix={suffix?.ToString() ?? "None"}, method=clipboard-paste");
+            $"Injection begin: text='{Sample(englishText)}', typedLength={typedLength}, suffix={suffix?.ToString() ?? "None"}");
 
+        if (TryReplaceWithUiAutomation(englishText, typedLength))
+        {
+            ScannerDiagnosticLog.Write("Injection completed with UI Automation ValuePattern.");
+            SendSuffix(suffix);
+            return;
+        }
+
+        ScannerDiagnosticLog.Write("UI Automation replacement unavailable; falling back to select-and-paste.");
+        ReplaceWithClipboardFallback(englishText, typedLength, suffix);
+    }
+
+    private static bool TryReplaceWithUiAutomation(string englishText, int typedLength)
+    {
+        try
+        {
+            AutomationElement? element = AutomationElement.FocusedElement;
+            if (element == null)
+            {
+                ScannerDiagnosticLog.Write("UIA replacement unavailable: no focused AutomationElement.");
+                return false;
+            }
+
+            if (!element.TryGetCurrentPattern(ValuePattern.Pattern, out object? valuePatternObject))
+            {
+                ScannerDiagnosticLog.Write($"UIA replacement unavailable: focused control '{SafeName(element)}' has no ValuePattern.");
+                return false;
+            }
+
+            var valuePattern = (ValuePattern)valuePatternObject;
+            if (valuePattern.Current.IsReadOnly)
+            {
+                ScannerDiagnosticLog.Write($"UIA replacement unavailable: focused control '{SafeName(element)}' is read-only.");
+                return false;
+            }
+
+            string currentValue = valuePattern.Current.Value ?? string.Empty;
+            int caretOffset = currentValue.Length;
+            bool caretFromTextPattern = false;
+
+            if (element.TryGetCurrentPattern(TextPattern.Pattern, out object? textPatternObject))
+            {
+                try
+                {
+                    var textPattern = (TextPattern)textPatternObject;
+                    TextPatternRange[] ranges = textPattern.GetSelection();
+                    if (ranges is { Length: > 0 })
+                    {
+                        TextPatternRange prefix = textPattern.DocumentRange.Clone();
+                        prefix.MoveEndpointByRange(
+                            TextPatternRangeEndpoint.End,
+                            ranges[0],
+                            TextPatternRangeEndpoint.Start);
+
+                        string beforeCaret = prefix.GetText(-1) ?? string.Empty;
+                        caretOffset = Math.Min(beforeCaret.Length, currentValue.Length);
+                        caretFromTextPattern = true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    ScannerDiagnosticLog.WriteException("UIA caret lookup failed; assuming caret is at end of ValuePattern text", ex);
+                    caretOffset = currentValue.Length;
+                }
+            }
+
+            if (caretOffset < typedLength)
+            {
+                ScannerDiagnosticLog.Write(
+                    $"UIA replacement rejected: caretOffset={caretOffset}, typedLength={typedLength}, valueLength={currentValue.Length}.");
+                return false;
+            }
+
+            int replaceStart = caretOffset - typedLength;
+            string newValue = currentValue[..replaceStart] + englishText + currentValue[caretOffset..];
+
+            ScannerDiagnosticLog.Write(
+                $"UIA replacement attempt: control='{SafeName(element)}', valueLength={currentValue.Length}, caretOffset={caretOffset}, caretFromTextPattern={caretFromTextPattern}, replaceStart={replaceStart}, typedLength={typedLength}.");
+
+            valuePattern.SetValue(newValue);
+
+            int desiredCaret = replaceStart + englishText.Length;
+            TryRestoreUiAutomationCaret(desiredCaret);
+
+            AutomationElement? verifyElement = AutomationElement.FocusedElement;
+            if (verifyElement != null &&
+                verifyElement.TryGetCurrentPattern(ValuePattern.Pattern, out object? verifyPatternObject))
+            {
+                string verified = ((ValuePattern)verifyPatternObject).Current.Value ?? string.Empty;
+                bool matches = string.Equals(verified, newValue, StringComparison.Ordinal);
+                ScannerDiagnosticLog.Write(
+                    $"UIA replacement verification: success={matches}, resultingLength={verified.Length}.");
+                return matches;
+            }
+
+            ScannerDiagnosticLog.Write("UIA replacement applied; verification ValuePattern was unavailable.");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ScannerDiagnosticLog.WriteException("UIA scanner replacement failed", ex);
+            return false;
+        }
+    }
+
+    private static void TryRestoreUiAutomationCaret(int offset)
+    {
+        try
+        {
+            AutomationElement? element = AutomationElement.FocusedElement;
+            if (element == null ||
+                !element.TryGetCurrentPattern(TextPattern.Pattern, out object? textPatternObject))
+            {
+                return;
+            }
+
+            var textPattern = (TextPattern)textPatternObject;
+            TextPatternRange range = textPattern.DocumentRange.Clone();
+            range.MoveEndpointByRange(
+                TextPatternRangeEndpoint.End,
+                range,
+                TextPatternRangeEndpoint.Start);
+
+            if (offset > 0)
+                range.Move(TextUnit.Character, offset);
+
+            range.Select();
+            ScannerDiagnosticLog.Write($"UIA caret restored to offset {offset}.");
+        }
+        catch (Exception ex)
+        {
+            ScannerDiagnosticLog.WriteException("UIA caret restore failed", ex);
+        }
+    }
+
+    private static string SafeName(AutomationElement element)
+    {
+        try
+        {
+            string name = element.Current.Name;
+            string type = element.Current.ControlType?.ProgrammaticName ?? "unknown";
+            return string.IsNullOrWhiteSpace(name) ? type : $"{name} ({type})";
+        }
+        catch
+        {
+            return "unknown";
+        }
+    }
+
+    private static void ReplaceWithClipboardFallback(string englishText, int typedLength, Keys? suffix)
+    {
         IDataObject? originalClipboard = null;
         try
         {
@@ -57,25 +209,25 @@ internal static class ScannerTextInjector
             AddVirtualKey(inputs, VK_V);
             AddKeyUp(inputs, VK_CONTROL);
 
-            Send(inputs, "select-and-paste");
-
-            // Give the foreground application time to process Ctrl+V before
-            // re-sending the scanner's original Enter/Tab suffix.
+            Send(inputs, "fallback-select-and-paste");
             Thread.Sleep(70);
-
-            if (suffix is Keys.Enter or Keys.Tab)
-            {
-                var suffixInputs = new List<INPUT>(2);
-                AddVirtualKey(suffixInputs, suffix == Keys.Enter ? VK_RETURN : VK_TAB);
-                Send(suffixInputs, $"suffix-{suffix}");
-            }
-
+            SendSuffix(suffix);
             Thread.Sleep(70);
         }
         finally
         {
             RestoreClipboard(originalClipboard);
         }
+    }
+
+    private static void SendSuffix(Keys? suffix)
+    {
+        if (suffix is not (Keys.Enter or Keys.Tab))
+            return;
+
+        var suffixInputs = new List<INPUT>(2);
+        AddVirtualKey(suffixInputs, suffix == Keys.Enter ? VK_RETURN : VK_TAB);
+        Send(suffixInputs, $"suffix-{suffix}");
     }
 
     private static bool TrySetClipboardText(string text)
