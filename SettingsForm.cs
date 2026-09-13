@@ -1,0 +1,641 @@
+using System;
+using System.Drawing;
+using System.Linq;
+using System.Windows.Forms;
+
+namespace LayoutFixer;
+
+public sealed class SettingsForm : Form
+{
+    private readonly AppSettings _settings;
+
+    private GradientHeaderPanel _header = null!;
+    private Panel _content = null!;
+    private Panel _footer = null!;
+    private CardPanel _correctionCard = null!;
+    private CardPanel _preferencesCard = null!;
+
+    private PictureBox _logo = null!;
+    private Label _title = null!;
+    private Label _tagline = null!;
+    private Label _versionBadge = null!;
+    private Label _correctionTitle = null!;
+    private Label _preferencesTitle = null!;
+    private Label _installedTitle = null!;
+
+    private ComboBox _language = null!;
+    private CheckBox _startup = null!;
+    private CheckBox _full = null!;
+    private CheckBox _word = null!;
+    private ModernButton _fullHotkey = null!;
+    private ModernButton _wordHotkey = null!;
+
+    private SelectableLabel _languageLabel = null!;
+    private SelectableLabel _fullLabel = null!;
+    private SelectableLabel _wordLabel = null!;
+    private SelectableLabel _hotkeyHelp = null!;
+    private SelectableLabel _info = null!;
+    private SelectableLabel _availableLayouts = null!;
+
+    private ModernButton _changelog = null!;
+    private ModernButton _save = null!;
+    private ModernButton _defaults = null!;
+    private bool _updatingLanguage;
+
+    public SettingsForm(AppSettings settings)
+    {
+        _settings = settings;
+        UiText.Language = _settings.Language;
+
+        Text = AppInfo.DisplayName;
+        Icon = AppAssets.GetIcon();
+        StartPosition = FormStartPosition.CenterScreen;
+        ClientSize = new Size(1180, 735);
+        MinimumSize = new Size(1050, 680);
+        FormBorderStyle = FormBorderStyle.Sizable;
+        MaximizeBox = true;
+        MinimizeBox = true;
+        AutoScaleMode = AutoScaleMode.Dpi;
+        BackColor = Color.FromArgb(243, 247, 252);
+        Font = new Font("Segoe UI", 10F);
+
+        Build();
+        ApplyLanguage();
+        ResizeLayout();
+
+        Resize += (_, _) => ResizeLayout();
+    }
+
+    private void Build()
+    {
+        _header = new GradientHeaderPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 148
+        };
+
+        _logo = new PictureBox
+        {
+            Left = 34,
+            Top = 24,
+            Width = 96,
+            Height = 96,
+            SizeMode = PictureBoxSizeMode.Zoom,
+            Image = AppAssets.GetLogo(),
+            BackColor = Color.Transparent
+        };
+
+        _title = new Label
+        {
+            Left = 151,
+            Top = 30,
+            Width = 650,
+            Height = 48,
+            Text = "LayoutFixer",
+            Font = new Font("Segoe UI", 26F, FontStyle.Bold),
+            ForeColor = Color.White,
+            BackColor = Color.Transparent
+        };
+
+        _tagline = new Label
+        {
+            Left = 154,
+            Top = 82,
+            Width = 650,
+            Height = 34,
+            Font = new Font("Segoe UI", 13F, FontStyle.Regular),
+            ForeColor = Color.FromArgb(215, 230, 250),
+            BackColor = Color.Transparent
+        };
+
+        _versionBadge = new Label
+        {
+            Width = 112,
+            Height = 42,
+            Top = 46,
+            TextAlign = ContentAlignment.MiddleCenter,
+            Font = new Font("Segoe UI", 12F, FontStyle.Bold),
+            ForeColor = Color.White,
+            BackColor = Color.FromArgb(20, 112, 235)
+        };
+
+        _header.Controls.AddRange(new Control[]
+        {
+            _logo,
+            _title,
+            _tagline,
+            _versionBadge
+        });
+
+        _content = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.FromArgb(243, 247, 252),
+            Padding = new Padding(24, 24, 24, 16)
+        };
+
+        _correctionCard = new CardPanel();
+        _preferencesCard = new CardPanel();
+
+        BuildCorrectionCard();
+        BuildPreferencesCard();
+
+        _content.Controls.Add(_correctionCard);
+        _content.Controls.Add(_preferencesCard);
+
+        _footer = new Panel
+        {
+            Dock = DockStyle.Bottom,
+            Height = 88,
+            BackColor = Color.White,
+            Padding = new Padding(24, 18, 24, 18)
+        };
+        _footer.Paint += (_, e) =>
+        {
+            using var pen = new Pen(Color.FromArgb(222, 228, 237));
+            e.Graphics.DrawLine(pen, 0, 0, _footer.Width, 0);
+        };
+
+        _defaults = new ModernButton
+        {
+            Width = 200,
+            Height = 46,
+            Primary = false
+        };
+        _defaults.Click += (_, _) => RestoreDefaults();
+
+        _save = new ModernButton
+        {
+            Width = 190,
+            Height = 46,
+            Primary = true
+        };
+        _save.Click += (_, _) => SaveSettings();
+
+        _footer.Controls.Add(_defaults);
+        _footer.Controls.Add(_save);
+
+        Controls.Add(_content);
+        Controls.Add(_footer);
+        Controls.Add(_header);
+    }
+
+    private void BuildCorrectionCard()
+    {
+        _correctionTitle = new Label
+        {
+            Left = 26,
+            Top = 22,
+            Width = 360,
+            Height = 34,
+            Font = new Font("Segoe UI", 16F, FontStyle.Bold),
+            ForeColor = Color.FromArgb(22, 40, 70),
+            BackColor = Color.White
+        };
+
+        _full = new CheckBox
+        {
+            Left = 28,
+            Top = 86,
+            Width = 22,
+            Height = 28,
+            Checked = _settings.FullTextEnabled,
+            BackColor = Color.White
+        };
+
+        _fullLabel = MakeSelectableLabel(58, 82, 350, 32);
+
+        _fullHotkey = MakeHotkeyButton(_settings.FullTextHotkey);
+
+        _word = new CheckBox
+        {
+            Left = 28,
+            Top = 151,
+            Width = 22,
+            Height = 28,
+            Checked = _settings.LastWordEnabled,
+            BackColor = Color.White
+        };
+
+        _wordLabel = MakeSelectableLabel(58, 147, 350, 52);
+
+        _wordHotkey = MakeHotkeyButton(_settings.LastWordHotkey);
+
+        _hotkeyHelp = MakeSelectableLabel(28, 225, 500, 74);
+        _hotkeyHelp.Multiline = true;
+        _hotkeyHelp.Font = new Font("Segoe UI", 9.5F);
+        _hotkeyHelp.ForeColor = Color.FromArgb(88, 101, 122);
+
+        _correctionCard.Controls.AddRange(new Control[]
+        {
+            _correctionTitle,
+            _full,
+            _fullLabel,
+            _fullHotkey,
+            _word,
+            _wordLabel,
+            _wordHotkey,
+            _hotkeyHelp
+        });
+    }
+
+    private void BuildPreferencesCard()
+    {
+        _preferencesTitle = new Label
+        {
+            Left = 26,
+            Top = 22,
+            Width = 310,
+            Height = 34,
+            Font = new Font("Segoe UI", 16F, FontStyle.Bold),
+            ForeColor = Color.FromArgb(22, 40, 70),
+            BackColor = Color.White
+        };
+
+        _languageLabel = MakeSelectableLabel(28, 78, 120, 30);
+
+        _language = new ComboBox
+        {
+            Left = 28,
+            Top = 109,
+            Width = 290,
+            Height = 34,
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Font = new Font("Segoe UI", 10F)
+        };
+
+        _language.Items.AddRange(new object[]
+        {
+            new LanguageItem("en"),
+            new LanguageItem("ru"),
+            new LanguageItem("he")
+        });
+        SelectLanguage(_settings.Language);
+        _language.SelectedIndexChanged += (_, _) =>
+        {
+            if (_updatingLanguage)
+                return;
+
+            if (_language.SelectedItem is LanguageItem item)
+            {
+                string oldLanguage = UiText.Language;
+                CrashLogger.Write($"Language change requested: {oldLanguage} -> {item.Code}");
+
+                try
+                {
+                    UiText.Language = item.Code;
+                    ApplyLanguage();
+                    CrashLogger.Write($"Language change completed: {oldLanguage} -> {item.Code}");
+                }
+                catch (Exception ex)
+                {
+                    CrashLogger.WriteException(
+                        $"SettingsForm language change {oldLanguage} -> {item.Code}",
+                        ex);
+                    throw;
+                }
+            }
+        };
+
+        _startup = new CheckBox
+        {
+            Left = 28,
+            Top = 168,
+            Width = 310,
+            Height = 32,
+            Checked = _settings.StartWithWindows,
+            BackColor = Color.White
+        };
+
+        _installedTitle = new Label
+        {
+            Left = 28,
+            Top = 224,
+            Width = 310,
+            Height = 26,
+            Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+            ForeColor = Color.FromArgb(40, 58, 86),
+            BackColor = Color.White
+        };
+
+        _availableLayouts = MakeSelectableLabel(28, 254, 310, 30);
+        _availableLayouts.ForeColor = Color.FromArgb(20, 112, 235);
+        _availableLayouts.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+
+        _info = MakeSelectableLabel(28, 302, 310, 95);
+        _info.Multiline = true;
+        _info.Font = new Font("Segoe UI", 9F);
+        _info.ForeColor = Color.FromArgb(88, 101, 122);
+
+        _changelog = new ModernButton
+        {
+            Left = 28,
+            Width = 205,
+            Height = 42,
+            Primary = false
+        };
+        _changelog.Click += (_, _) =>
+        {
+            using var form = new ChangeLogForm(UiText.Language);
+            form.ShowDialog(this);
+        };
+
+        _preferencesCard.Controls.AddRange(new Control[]
+        {
+            _preferencesTitle,
+            _languageLabel,
+            _language,
+            _startup,
+            _installedTitle,
+            _availableLayouts,
+            _info,
+            _changelog
+        });
+    }
+
+    private void ResizeLayout()
+    {
+        _versionBadge.Left = Math.Max(820, _header.ClientSize.Width - _versionBadge.Width - 34);
+
+        int areaWidth = _content.ClientSize.Width - _content.Padding.Left - _content.Padding.Right;
+        int areaHeight = _content.ClientSize.Height - _content.Padding.Top - _content.Padding.Bottom;
+        int gap = 20;
+        int rightWidth = Math.Max(330, (int)(areaWidth * 0.37));
+        int leftWidth = areaWidth - rightWidth - gap;
+
+        if (leftWidth < 500)
+        {
+            leftWidth = areaWidth;
+            rightWidth = areaWidth;
+            int stackedHeight = Math.Max(330, (areaHeight - gap) / 2);
+
+            _correctionCard.SetBounds(
+                _content.Padding.Left,
+                _content.Padding.Top,
+                areaWidth,
+                stackedHeight);
+
+            _preferencesCard.SetBounds(
+                _content.Padding.Left,
+                _content.Padding.Top + stackedHeight + gap,
+                areaWidth,
+                stackedHeight);
+        }
+        else
+        {
+            int leftX = _content.Padding.Left;
+            int rightX = leftX + leftWidth + gap;
+
+            if (UiText.IsRtl)
+            {
+                int tmp = leftX;
+                leftX = _content.Padding.Left + rightWidth + gap;
+                rightX = tmp;
+            }
+
+            _correctionCard.SetBounds(leftX, _content.Padding.Top, leftWidth, areaHeight);
+            _preferencesCard.SetBounds(rightX, _content.Padding.Top, rightWidth, areaHeight);
+        }
+
+        int hotkeyWidth = 180;
+        _fullHotkey.SetBounds(
+            Math.Max(300, _correctionCard.ClientSize.Width - hotkeyWidth - 28),
+            76,
+            hotkeyWidth,
+            42);
+        _wordHotkey.SetBounds(
+            Math.Max(300, _correctionCard.ClientSize.Width - hotkeyWidth - 28),
+            141,
+            hotkeyWidth,
+            42);
+
+        int textWidth = Math.Max(210, _correctionCard.ClientSize.Width - hotkeyWidth - 115);
+        _fullLabel.Width = textWidth;
+        _wordLabel.Width = textWidth;
+        _hotkeyHelp.Width = Math.Max(300, _correctionCard.ClientSize.Width - 56);
+
+        _language.Width = Math.Max(220, _preferencesCard.ClientSize.Width - 56);
+        _startup.Width = Math.Max(220, _preferencesCard.ClientSize.Width - 56);
+        _installedTitle.Width = Math.Max(220, _preferencesCard.ClientSize.Width - 56);
+        _availableLayouts.Width = Math.Max(220, _preferencesCard.ClientSize.Width - 56);
+        _info.Width = Math.Max(220, _preferencesCard.ClientSize.Width - 56);
+        _changelog.Top = Math.Max(408, _preferencesCard.ClientSize.Height - 66);
+
+        _save.Left = _footer.ClientSize.Width - _footer.Padding.Right - _save.Width;
+        _save.Top = 20;
+        _defaults.Left = _save.Left - 14 - _defaults.Width;
+        _defaults.Top = 20;
+    }
+
+    private void ApplyLanguage()
+    {
+        CrashLogger.Write($"ApplyLanguage begin: language={UiText.Language}, rtl={UiText.IsRtl}");
+        bool rtl = UiText.IsRtl;
+
+        RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
+        RightToLeftLayout = rtl;
+
+        Text = $"{AppInfo.DisplayName} — {UiText.Get("settings")}";
+        _tagline.Text = UiText.Get("tagline");
+        _versionBadge.Text = $"v{AppInfo.Version}";
+
+        _correctionTitle.Text = UiText.Get("correction_section");
+        _preferencesTitle.Text = UiText.Get("preferences_section");
+        _languageLabel.Text = UiText.Get("language");
+        _startup.Text = UiText.Get("startup");
+        _fullLabel.Text = UiText.Get("full_text");
+        _wordLabel.Text = UiText.Get("selection_word");
+        _hotkeyHelp.Text = UiText.Get("hotkey_hint");
+        _installedTitle.Text = UiText.Get("installed_layouts");
+        _info.Text = UiText.Get("supported_info");
+        _availableLayouts.Text = string.Join(
+            "   •   ",
+            KeyboardLayout.AvailableLanguages.Select(
+                KeyboardLayout.DisplayName));
+
+        _changelog.Text = UiText.Get("changelog");
+        _defaults.Text = UiText.Get("defaults");
+        _save.Text = UiText.Get("save");
+
+        string selectedCode =
+            (_language.SelectedItem as LanguageItem)?.Code ??
+            _settings.Language;
+
+        _updatingLanguage = true;
+        try
+        {
+            _language.BeginUpdate();
+            _language.Items.Clear();
+            _language.Items.AddRange(new object[]
+            {
+                new LanguageItem("en"),
+                new LanguageItem("ru"),
+                new LanguageItem("he")
+            });
+            SelectLanguage(selectedCode);
+            _language.EndUpdate();
+        }
+        finally
+        {
+            _updatingLanguage = false;
+        }
+
+        ResizeLayout();
+        CrashLogger.Write($"ApplyLanguage end: language={UiText.Language}");
+    }
+
+    private void RestoreDefaults()
+    {
+        DialogResult answer = MessageBox.Show(
+            this,
+            UiText.Get("defaults_confirm"),
+            AppInfo.Name,
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question);
+
+        if (answer != DialogResult.Yes)
+            return;
+
+        AppSettings defaults = AppSettings.CreateDefault();
+
+        _startup.Checked = defaults.StartWithWindows;
+        _full.Checked = defaults.FullTextEnabled;
+        _word.Checked = defaults.LastWordEnabled;
+        _fullHotkey.Text = defaults.FullTextHotkey;
+        _wordHotkey.Text = defaults.LastWordHotkey;
+
+        UiText.Language = defaults.Language;
+        SelectLanguage(defaults.Language);
+        ApplyLanguage();
+    }
+
+    private SelectableLabel MakeSelectableLabel(
+        int left,
+        int top,
+        int width,
+        int height)
+    {
+        return new SelectableLabel
+        {
+            Left = left,
+            Top = top,
+            Width = width,
+            Height = height,
+            BackColor = Color.White,
+            ForeColor = Color.FromArgb(31, 45, 70),
+            Font = new Font("Segoe UI", 10.5F)
+        };
+    }
+
+    private ModernButton MakeHotkeyButton(string selected)
+    {
+        var button = new ModernButton
+        {
+            Primary = false,
+            Text = HotkeyDefinition.IsValid(selected)
+                ? HotkeyDefinition.Format(HotkeyDefinition.Parse(selected))
+                : ""
+        };
+
+        button.Click += (_, _) => EditHotkey(button);
+        return button;
+    }
+
+    private void EditHotkey(ModernButton target)
+    {
+        using var editor = new HotkeyEditorForm(UiText.Language);
+
+        if (editor.ShowDialog(this) == DialogResult.OK)
+            target.Text = editor.Hotkey;
+    }
+
+    private void SaveSettings()
+    {
+        string full = _fullHotkey.Text;
+        string word = _wordHotkey.Text;
+
+        if (!HotkeyDefinition.IsValid(full) ||
+            !HotkeyDefinition.IsValid(word))
+        {
+            MessageBox.Show(
+                this,
+                UiText.Get("invalid_hotkey"),
+                AppInfo.Name,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return;
+        }
+
+        if (HotkeyDefinition.Parse(full)
+            .SetEquals(HotkeyDefinition.Parse(word)))
+        {
+            MessageBox.Show(
+                this,
+                UiText.Get("duplicate_hotkey"),
+                AppInfo.Name,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return;
+        }
+
+        _settings.StartWithWindows = _startup.Checked;
+        _settings.FullTextEnabled = _full.Checked;
+        _settings.LastWordEnabled = _word.Checked;
+        _settings.FullTextHotkey = full;
+        _settings.LastWordHotkey = word;
+        _settings.Language =
+            (_language.SelectedItem as LanguageItem)?.Code ?? "en";
+
+        UiText.Language = _settings.Language;
+
+        StartupManager.SetEnabled(_settings.StartWithWindows);
+        _settings.Save();
+
+        DialogResult = DialogResult.OK;
+        Close();
+    }
+
+    private void SelectLanguage(string code)
+    {
+        for (int i = 0; i < _language.Items.Count; i++)
+        {
+            if (_language.Items[i] is LanguageItem item &&
+                item.Code == code)
+            {
+                _language.SelectedIndex = i;
+                return;
+            }
+        }
+
+        if (_language.Items.Count > 0)
+            _language.SelectedIndex = 0;
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _logo?.Image?.Dispose();
+            Icon?.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
+
+    private sealed class LanguageItem
+    {
+        public string Code { get; }
+
+        public LanguageItem(string code)
+        {
+            Code = code;
+        }
+
+        public override string ToString() => Code switch
+        {
+            "ru" => UiText.Get("russian"),
+            "he" => UiText.Get("hebrew"),
+            _ => UiText.Get("english")
+        };
+    }
+}
