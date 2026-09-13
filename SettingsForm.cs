@@ -51,7 +51,7 @@ public sealed class SettingsForm : Form
         Icon = AppAssets.GetIcon();
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(1180, 760);
-        MinimumSize = new Size(1050, 710);
+        MinimumSize = new Size(1050, 740);
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = true;
         MinimizeBox = true;
@@ -88,9 +88,9 @@ public sealed class SettingsForm : Form
         _title = new Label
         {
             Left = 151,
-            Top = 24,
+            Top = 18,
             Width = 650,
-            Height = 60,
+            Height = 72,
             Text = "LayoutFixer",
             Font = new Font("Segoe UI", 26F, FontStyle.Bold),
             ForeColor = Color.White,
@@ -101,7 +101,7 @@ public sealed class SettingsForm : Form
         _tagline = new Label
         {
             Left = 154,
-            Top = 84,
+            Top = 88,
             Width = 650,
             Height = 40,
             Font = new Font("Segoe UI", 13F, FontStyle.Regular),
@@ -207,7 +207,6 @@ public sealed class SettingsForm : Form
         };
 
         _fullLabel = MakeSelectableLabel(58, 82, 350, 32);
-
         _fullHotkey = MakeHotkeyButton(_settings.FullTextHotkey);
 
         _word = new CheckBox
@@ -221,7 +220,6 @@ public sealed class SettingsForm : Form
         };
 
         _wordLabel = MakeSelectableLabel(58, 147, 350, 52);
-
         _wordHotkey = MakeHotkeyButton(_settings.LastWordHotkey);
 
         _hotkeyHelp = MakeSelectableLabel(28, 225, 500, 82);
