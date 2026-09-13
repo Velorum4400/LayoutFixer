@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Windows.Automation;
 using System.Windows.Automation.Text;
 
@@ -36,6 +37,23 @@ public static class SelectionPreserver
         if (length <= 0)
             return false;
 
+        // Most applications are ready immediately after the paste completes.
+        // A few expose the new caret through UI Automation a few milliseconds
+        // later, so retry briefly instead of forcing a large fixed delay for all apps.
+        for (int attempt = 0; attempt < 6; attempt++)
+        {
+            if (TryRestorePreviousSelection(length))
+                return true;
+
+            if (attempt < 5)
+                Thread.Sleep(12);
+        }
+
+        return false;
+    }
+
+    private static bool TryRestorePreviousSelection(int length)
+    {
         try
         {
             AutomationElement? element = AutomationElement.FocusedElement;
