@@ -52,6 +52,20 @@ public static class UiText
         ["available_layouts"] = L("Available layouts:", "Доступные раскладки:", "פריסות זמינות:"),
         ["version"] = L("Version:", "Версия:", "גרסה:"),
         ["changelog"] = L("Change log", "Список изменений", "רשימת שינויים"),
+        ["clear_log"] = L("Clear log", "Очистить лог", "נקה לוג"),
+        ["clear_log_confirm"] = L(
+            "Do you really want to clear the log?",
+            "Действительно вы хотите очистить лог?",
+            "האם באמת ברצונך לנקות את הלוג?"),
+        ["clear_log_success"] = L(
+            "Log cleared successfully",
+            "Лог очищен успешно",
+            "הלוג נוקה בהצלחה"),
+        ["clear_log_failed"] = L(
+            "Failed to clear log",
+            "Не удалось очистить лог",
+            "ניקוי הלוג נכשל"),
+        ["close"] = L("Close", "Закрыть", "סגור"),
         ["save"] = L("Save", "Сохранить", "שמור"),
         ["defaults"] = L("Restore defaults", "По умолчанию", "שחזר ברירות מחדל"),
         ["defaults_confirm"] = L(
