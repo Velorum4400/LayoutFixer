@@ -17,7 +17,13 @@ internal static class ScannerTextInjector
     public static void ReplacePreviousText(string englishText, int typedLength, Keys? suffix)
     {
         if (string.IsNullOrEmpty(englishText) || typedLength <= 0)
+        {
+            ScannerDiagnosticLog.Write($"Injection skipped: empty text or invalid typedLength={typedLength}");
             return;
+        }
+
+        ScannerDiagnosticLog.Write(
+            $"Injection begin: text='{Sample(englishText)}', typedLength={typedLength}, suffix={suffix?.ToString() ?? "None"}");
 
         var inputs = new List<INPUT>(typedLength * 2 + englishText.Length * 2 + 4);
 
@@ -37,8 +43,19 @@ internal static class ScannerTextInjector
 
         INPUT[] array = inputs.ToArray();
         uint sent = SendInput((uint)array.Length, array, Marshal.SizeOf<INPUT>());
+        int error = Marshal.GetLastWin32Error();
+
+        ScannerDiagnosticLog.Write(
+            $"Injection result: sent={sent}, expected={array.Length}, error={error}");
+
         if (sent != array.Length)
-            CrashLogger.Write($"Scanner SendInput incomplete: sent={sent}, expected={array.Length}, error={Marshal.GetLastWin32Error()}");
+            CrashLogger.Write($"Scanner SendInput incomplete: sent={sent}, expected={array.Length}, error={error}");
+    }
+
+    private static string Sample(string value)
+    {
+        string text = value.Replace("\r", "\\r").Replace("\n", "\\n");
+        return text.Length <= 100 ? text : text[..100] + "...";
     }
 
     private static void AddVirtualKey(List<INPUT> inputs, ushort vk)
