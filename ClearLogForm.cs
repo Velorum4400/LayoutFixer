@@ -102,7 +102,10 @@ public sealed class ClearLogForm : Form
             Directory.CreateDirectory(AppRuntime.DataDirectory);
 
             string diagnosticPath = AppRuntime.GetDataPath("diagnostic.log");
+            string scannerDiagnosticPath = AppRuntime.GetDataPath("scaner_diagnostic.log");
+
             File.WriteAllText(diagnosticPath, string.Empty);
+            File.WriteAllText(scannerDiagnosticPath, string.Empty);
 
             ShowResult(UiText.Get("clear_log_success"), null, success: true);
         }
@@ -143,7 +146,7 @@ public sealed class ClearLogForm : Form
             string errorPath = AppRuntime.GetDataPath("error.log");
             File.AppendAllText(
                 errorPath,
-                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] Failed to clear diagnostic.log\r\n{ex}\r\n\r\n");
+                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] Failed to clear diagnostic logs\r\n{ex}\r\n\r\n");
         }
         catch
         {
