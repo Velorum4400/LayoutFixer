@@ -40,8 +40,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         _hook = new KeyboardHook
         {
             FullTextHotkey = _settings.FullTextHotkey,
-            LastWordHotkey = _settings.LastWordHotkey,
-            KeyDownFilter = key => _scanner.TryHandleTerminator(key)
+            LastWordHotkey = _settings.LastWordHotkey
         };
 
         _hotkeyTimer = new System.Windows.Forms.Timer { Interval = 60 };
