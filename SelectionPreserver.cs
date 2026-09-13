@@ -50,6 +50,11 @@ public static class SelectionPreserver
             if (ranges == null || ranges.Length == 0)
                 return false;
 
+            // Some editors keep the replacement selected after paste already.
+            string currentSelection = ranges[0].GetText(-1);
+            if (!string.IsNullOrEmpty(currentSelection))
+                return true;
+
             TextPatternRange caret = ranges[0].Clone();
             caret.MoveEndpointByRange(
                 TextPatternRangeEndpoint.End,
