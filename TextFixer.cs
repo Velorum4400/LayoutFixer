@@ -3,7 +3,6 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Automation;
 using System.Windows.Automation.Text;
 using System.Windows.Forms;
@@ -39,7 +38,6 @@ public static class TextFixer
         Log($"START lastWord={lastWord}, target=0x{targetWindow.ToInt64():X}, focus=0x{focusWindow.ToInt64():X}, currentLayout={(currentLayout?.ToString() ?? "Unsupported")}, available=[{available}]");
 
         ClipboardSnapshot clipboardSnapshot = CaptureClipboardSnapshot();
-        bool pasteConfirmed = false;
 
         try
         {
@@ -132,11 +130,24 @@ public static class TextFixer
 
             Log("Ctrl+V sent");
 
-            pasteConfirmed = WaitForPasteCompletion(
+            // Wait until the target control has actually consumed Ctrl+V before
+            // restoring the user's original clipboard. For partial corrections,
+            // verify the text immediately before the post-paste caret; this also
+            // works when LayoutFixer selected the last word itself and there was
+            // no pre-existing SelectionSnapshot.
+            bool pasteConfirmed = WaitForPasteCompletion(
                 focusWindow != IntPtr.Zero ? focusWindow : targetWindow,
-                original,
                 converted,
-                selectionSnapshot);
+                lastWord);
+
+            if (!pasteConfirmed)
+            {
+                // UI Automation is not reliable in every editor. Keep the
+                // converted clipboard available for a conservative grace period
+                // instead of restoring the old clipboard asynchronously.
+                Log("Paste not confirmed through UI Automation; waiting before clipboard restore");
+                Thread.Sleep(180);
+            }
 
             if (selectionSnapshot?.HasSelection == true)
             {
@@ -156,7 +167,7 @@ public static class TextFixer
         }
         finally
         {
-            RestoreClipboardSnapshot(clipboardSnapshot, pasteConfirmed);
+            RestoreClipboardSnapshot(clipboardSnapshot);
         }
     }
 
@@ -235,37 +246,11 @@ public static class TextFixer
         return new ClipboardSnapshot();
     }
 
-    private static void RestoreClipboardSnapshot(ClipboardSnapshot snapshot, bool pasteConfirmed)
+    private static void RestoreClipboardSnapshot(ClipboardSnapshot snapshot)
     {
         if (!snapshot.Captured)
             return;
 
-        if (pasteConfirmed)
-        {
-            RestoreClipboardSnapshotNow(snapshot);
-            return;
-        }
-
-        RestoreClipboardSnapshotDelayed(snapshot);
-    }
-
-    private static async void RestoreClipboardSnapshotDelayed(ClipboardSnapshot snapshot)
-    {
-        try
-        {
-            // Keep the converted text in the clipboard long enough for slower
-            // applications to consume Ctrl+V before the original clipboard is restored.
-            await Task.Delay(180);
-            RestoreClipboardSnapshotNow(snapshot);
-        }
-        catch (Exception ex)
-        {
-            Log($"Delayed clipboard restore failed: {ex.GetType().Name}: {ex.Message}");
-        }
-    }
-
-    private static void RestoreClipboardSnapshotNow(ClipboardSnapshot snapshot)
-    {
         for (int attempt = 0; attempt < 30; attempt++)
         {
             try
@@ -290,15 +275,9 @@ public static class TextFixer
         }
     }
 
-    private static bool WaitForPasteCompletion(
-        IntPtr hwnd,
-        string original,
-        string converted,
-        SelectionPreserver.SelectionSnapshot? selectionSnapshot)
+    private static bool WaitForPasteCompletion(IntPtr hwnd, string converted, bool partialCorrection)
     {
-        bool sawTextPattern = false;
-
-        for (int attempt = 0; attempt < 18; attempt++)
+        for (int attempt = 0; attempt < 24; attempt++)
         {
             try
             {
@@ -309,65 +288,72 @@ public static class TextFixer
                 if (element != null &&
                     element.TryGetCurrentPattern(TextPattern.Pattern, out object? patternObj))
                 {
-                    sawTextPattern = true;
                     var textPattern = (TextPattern)patternObj;
+                    TextPatternRange[] ranges = textPattern.GetSelection();
 
-                    if (selectionSnapshot?.HasSelection == true)
+                    if (partialCorrection && ranges != null && ranges.Length > 0)
                     {
-                        if (RangeTextEquals(textPattern, selectionSnapshot.StartOffset, converted))
+                        TextPatternRange current = ranges[0];
+                        string selected = current.GetText(-1);
+
+                        // Some editors keep the newly pasted text selected.
+                        if (string.Equals(selected, converted, StringComparison.Ordinal))
                         {
-                            Log($"Paste completion confirmed at selection on attempt {attempt + 1}");
+                            Log($"Paste completion confirmed by selection on attempt {attempt + 1}");
+                            return true;
+                        }
+
+                        // Most editors collapse the selection at the end of the
+                        // inserted text. Rebuild a range directly before that caret.
+                        if (string.IsNullOrEmpty(selected) &&
+                            TextBeforeCaretEquals(current, converted))
+                        {
+                            Log($"Paste completion confirmed before caret on attempt {attempt + 1}");
                             return true;
                         }
                     }
-                    else
+
+                    string documentText = textPattern.DocumentRange.GetText(-1);
+                    string normalizedDoc = documentText.TrimEnd('\r', '\n');
+                    string normalizedConverted = converted.TrimEnd('\r', '\n');
+
+                    if (!partialCorrection &&
+                        string.Equals(normalizedDoc, normalizedConverted, StringComparison.Ordinal))
                     {
-                        string documentText = textPattern.DocumentRange.GetText(-1);
-                        string normalizedDoc = documentText.TrimEnd('\r', '\n');
-                        string normalizedConverted = converted.TrimEnd('\r', '\n');
-
-                        if (string.Equals(normalizedDoc, normalizedConverted, StringComparison.Ordinal))
-                        {
-                            Log($"Paste completion confirmed for full text on attempt {attempt + 1}");
-                            return true;
-                        }
-
-                        if (documentText.Contains(converted, StringComparison.Ordinal) &&
-                            !documentText.Contains(original, StringComparison.Ordinal))
-                        {
-                            Log($"Paste completion confirmed in document on attempt {attempt + 1}");
-                            return true;
-                        }
+                        Log($"Paste completion confirmed for full text on attempt {attempt + 1}");
+                        return true;
                     }
                 }
             }
             catch (Exception ex)
             {
-                Log($"Paste completion UIA check failed: {ex.GetType().Name}");
+                Log($"Paste completion UIA check failed: {ex.GetType().Name}: {ex.Message}");
                 break;
             }
 
-            Thread.Sleep(10);
+            Thread.Sleep(8);
         }
 
-        Log($"Paste completion not confirmed; textPattern={sawTextPattern}. Clipboard restore will be delayed.");
         return false;
     }
 
-    private static bool RangeTextEquals(TextPattern textPattern, int startOffset, string expected)
+    private static bool TextBeforeCaretEquals(TextPatternRange caretRange, string expected)
     {
-        TextPatternRange range = textPattern.DocumentRange.Clone();
-        range.MoveEndpointByRange(TextPatternRangeEndpoint.End, range, TextPatternRangeEndpoint.Start);
+        if (expected.Length == 0)
+            return true;
 
-        if (startOffset > 0 && range.Move(TextUnit.Character, startOffset) != startOffset)
-            return false;
-
-        int extended = range.MoveEndpointByUnit(
+        TextPatternRange range = caretRange.Clone();
+        range.MoveEndpointByRange(
             TextPatternRangeEndpoint.End,
-            TextUnit.Character,
-            expected.Length);
+            range,
+            TextPatternRangeEndpoint.Start);
 
-        if (extended != expected.Length)
+        int moved = range.MoveEndpointByUnit(
+            TextPatternRangeEndpoint.Start,
+            TextUnit.Character,
+            -expected.Length);
+
+        if (Math.Abs(moved) != expected.Length)
             return false;
 
         return string.Equals(range.GetText(-1), expected, StringComparison.Ordinal);
