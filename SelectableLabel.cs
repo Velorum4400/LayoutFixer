@@ -17,6 +17,8 @@ public sealed class SelectableLabel : TextBox
         Cursor = Cursors.Arrow;
         ShortcutsEnabled = true;
         TabStop = false;
+        Multiline = true;
+        WordWrap = true;
     }
 
     protected override void OnGotFocus(EventArgs e)
