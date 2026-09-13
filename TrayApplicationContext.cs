@@ -11,6 +11,7 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly Icon _appIcon;
     private readonly KeyboardHook _hook;
     private readonly ScannerInputService _scanner;
+    private readonly ScannerTerminatorHook _scannerTerminatorHook;
     private readonly AppSettings _settings;
     private bool _processing;
     private readonly System.Windows.Forms.Timer _hotkeyTimer;
@@ -26,6 +27,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         StartupManager.SetEnabled(_settings.StartWithWindows);
 
         _scanner = new ScannerInputService(_settings);
+        _scannerTerminatorHook = new ScannerTerminatorHook(_scanner);
 
         _appIcon = AppAssets.GetIcon();
 
@@ -97,9 +99,6 @@ public sealed class TrayApplicationContext : ApplicationContext
         if (_processing)
             return;
 
-        // Let the final physical modifier key-up reach the foreground app
-        // before we synthesize Ctrl+A/C/V. The timer runs on the WinForms
-        // UI/STA thread, which is also required for Clipboard access.
         _queuedHotkeyAction = action;
         _hotkeyTimer.Stop();
         _hotkeyTimer.Start();
@@ -133,8 +132,6 @@ public sealed class TrayApplicationContext : ApplicationContext
                 selectionSnapshot,
                 out KeyboardLanguage from,
                 out KeyboardLanguage to);
-
-            // No balloon notification: the correction itself is the feedback.
         }
         finally
         {
@@ -150,11 +147,8 @@ public sealed class TrayApplicationContext : ApplicationContext
         {
             UiText.Language = _settings.Language;
 
-            _hook.FullTextHotkey =
-                _settings.FullTextHotkey;
-
-            _hook.LastWordHotkey =
-                _settings.LastWordHotkey;
+            _hook.FullTextHotkey = _settings.FullTextHotkey;
+            _hook.LastWordHotkey = _settings.LastWordHotkey;
 
             _scanner.ApplySettings(_settings);
             _tray.ContextMenuStrip = BuildMenu();
@@ -166,6 +160,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         _hotkeyTimer.Stop();
         _hotkeyTimer.Dispose();
         _hook.Dispose();
+        _scannerTerminatorHook.Dispose();
         _scanner.Dispose();
         _tray.Visible = false;
         _tray.Dispose();
