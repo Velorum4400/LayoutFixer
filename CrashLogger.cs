@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace LayoutFixer;
@@ -10,10 +11,7 @@ internal static class CrashLogger
 {
     private static readonly object Sync = new();
 
-    public static string LogPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "LayoutFixer",
-        "crash.log");
+    public static string LogPath => AppRuntime.GetDataPath("crash.log");
 
     public static void Initialize()
     {
@@ -48,7 +46,7 @@ internal static class CrashLogger
             e.SetObserved();
         };
 
-        Write($"Application started. Version={AppInfo.Version}; OS={Environment.OSVersion}; .NET={Environment.Version}; UI thread={Environment.CurrentManagedThreadId}");
+        Write($"Application started. Version={AppInfo.Version}; portable={AppRuntime.IsPortable}; OS={Environment.OSVersion}; .NET={Environment.Version}; UI thread={Environment.CurrentManagedThreadId}");
     }
 
     public static void Write(string message)
