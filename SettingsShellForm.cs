@@ -111,13 +111,14 @@ public sealed class SettingsShellForm : Form
         _logo.Image = AppAssets.GetLogo();
         _logo.BackColor = Color.Transparent;
 
-        _brand.SetBounds(98, 28, 145, 32);
+        _brand.SetBounds(98, 22, 158, 42);
         _brand.Text = "LayoutFixer";
         _brand.Font = new Font("Segoe UI", 15F, FontStyle.Bold);
         _brand.ForeColor = Color.White;
         _brand.BackColor = Color.Transparent;
+        _brand.TextAlign = ContentAlignment.MiddleLeft;
 
-        _brandSub.SetBounds(99, 61, 145, 24);
+        _brandSub.SetBounds(99, 64, 155, 24);
         _brandSub.Text = $"v{AppInfo.Version}";
         _brandSub.ForeColor = Color.FromArgb(175, 199, 230);
         _brandSub.BackColor = Color.Transparent;
