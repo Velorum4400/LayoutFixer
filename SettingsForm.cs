@@ -50,8 +50,8 @@ public sealed class SettingsForm : Form
         Text = AppInfo.DisplayName;
         Icon = AppAssets.GetIcon();
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(1180, 760);
-        MinimumSize = new Size(1050, 740);
+        ClientSize = new Size(1180, 790);
+        MinimumSize = new Size(1050, 780);
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = true;
         MinimizeBox = true;
@@ -104,6 +104,7 @@ public sealed class SettingsForm : Form
             Top = 88,
             Width = 650,
             Height = 40,
+            Text = "Type in the right language",
             Font = new Font("Segoe UI", 13F, FontStyle.Regular),
             ForeColor = Color.FromArgb(215, 230, 250),
             BackColor = Color.Transparent,
@@ -401,21 +402,60 @@ public sealed class SettingsForm : Form
         }
 
         int hotkeyWidth = 180;
-        _fullHotkey.SetBounds(
-            Math.Max(300, _correctionCard.ClientSize.Width - hotkeyWidth - 28),
-            76,
-            hotkeyWidth,
-            42);
-        _wordHotkey.SetBounds(
-            Math.Max(300, _correctionCard.ClientSize.Width - hotkeyWidth - 28),
-            141,
-            hotkeyWidth,
-            42);
-
         int textWidth = Math.Max(210, _correctionCard.ClientSize.Width - hotkeyWidth - 115);
-        _fullLabel.Width = textWidth;
-        _wordLabel.Width = textWidth;
-        _hotkeyHelp.Width = Math.Max(300, _correctionCard.ClientSize.Width - 56);
+
+        if (UiText.IsRtl)
+        {
+            int checkboxX = _correctionCard.ClientSize.Width - 28 - _full.Width;
+            int labelRight = checkboxX - 8;
+            int rtlTextWidth = Math.Max(210, labelRight - hotkeyWidth - 76);
+
+            _full.SetBounds(checkboxX, 86, 22, 28);
+            _word.SetBounds(checkboxX, 151, 22, 28);
+
+            _fullHotkey.SetBounds(28, 76, hotkeyWidth, 42);
+            _wordHotkey.SetBounds(28, 141, hotkeyWidth, 42);
+
+            _fullLabel.SetBounds(labelRight - rtlTextWidth, 82, rtlTextWidth, 32);
+            _wordLabel.SetBounds(labelRight - rtlTextWidth, 147, rtlTextWidth, 52);
+            _fullLabel.TextAlign = HorizontalAlignment.Right;
+            _wordLabel.TextAlign = HorizontalAlignment.Right;
+
+            _correctionTitle.SetBounds(26, 16, Math.Max(200, _correctionCard.ClientSize.Width - 52), 46);
+            _correctionTitle.TextAlign = ContentAlignment.MiddleRight;
+
+            _hotkeyHelp.Left = 28;
+            _hotkeyHelp.Width = Math.Max(300, _correctionCard.ClientSize.Width - 56);
+            _hotkeyHelp.TextAlign = HorizontalAlignment.Right;
+        }
+        else
+        {
+            _full.SetBounds(28, 86, 22, 28);
+            _word.SetBounds(28, 151, 22, 28);
+
+            _fullHotkey.SetBounds(
+                Math.Max(300, _correctionCard.ClientSize.Width - hotkeyWidth - 28),
+                76,
+                hotkeyWidth,
+                42);
+            _wordHotkey.SetBounds(
+                Math.Max(300, _correctionCard.ClientSize.Width - hotkeyWidth - 28),
+                141,
+                hotkeyWidth,
+                42);
+
+            _fullLabel.SetBounds(58, 82, textWidth, 32);
+            _wordLabel.SetBounds(58, 147, textWidth, 52);
+            _fullLabel.TextAlign = HorizontalAlignment.Left;
+            _wordLabel.TextAlign = HorizontalAlignment.Left;
+
+            _correctionTitle.SetBounds(26, 16, 360, 46);
+            _correctionTitle.TextAlign = ContentAlignment.MiddleLeft;
+
+            _hotkeyHelp.Left = 28;
+            _hotkeyHelp.Width = Math.Max(300, _correctionCard.ClientSize.Width - 56);
+            _hotkeyHelp.TextAlign = HorizontalAlignment.Left;
+        }
 
         _language.Width = Math.Max(220, _preferencesCard.ClientSize.Width - 56);
         _startup.Width = Math.Max(220, _preferencesCard.ClientSize.Width - 56);
@@ -424,6 +464,33 @@ public sealed class SettingsForm : Form
         _info.Width = Math.Max(220, _preferencesCard.ClientSize.Width - 56);
         _info.Height = Math.Max(118, _preferencesCard.ClientSize.Height - 370);
         _changelog.Top = Math.Max(430, _preferencesCard.ClientSize.Height - 66);
+
+        if (UiText.IsRtl)
+        {
+            _preferencesTitle.SetBounds(26, 16, Math.Max(200, _preferencesCard.ClientSize.Width - 52), 46);
+            _preferencesTitle.TextAlign = ContentAlignment.MiddleRight;
+
+            _languageLabel.Width = 120;
+            _languageLabel.Left = Math.Max(28, _preferencesCard.ClientSize.Width - 28 - _languageLabel.Width);
+            _languageLabel.TextAlign = HorizontalAlignment.Right;
+
+            _installedTitle.TextAlign = ContentAlignment.MiddleRight;
+            _availableLayouts.TextAlign = HorizontalAlignment.Right;
+            _info.TextAlign = HorizontalAlignment.Right;
+        }
+        else
+        {
+            _preferencesTitle.SetBounds(26, 16, 310, 46);
+            _preferencesTitle.TextAlign = ContentAlignment.MiddleLeft;
+
+            _languageLabel.Left = 28;
+            _languageLabel.Width = 120;
+            _languageLabel.TextAlign = HorizontalAlignment.Left;
+
+            _installedTitle.TextAlign = ContentAlignment.MiddleLeft;
+            _availableLayouts.TextAlign = HorizontalAlignment.Left;
+            _info.TextAlign = HorizontalAlignment.Left;
+        }
 
         _save.Left = _footer.ClientSize.Width - _footer.Padding.Right - _save.Width;
         _save.Top = 20;
@@ -436,11 +503,13 @@ public sealed class SettingsForm : Form
         CrashLogger.Write($"ApplyLanguage begin: language={UiText.Language}, rtl={UiText.IsRtl}");
         bool rtl = UiText.IsRtl;
 
+        // Keep the header and the form's physical layout in the same positions.
+        // Hebrew-specific RTL positioning is applied only to the requested controls.
         RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
-        RightToLeftLayout = rtl;
+        RightToLeftLayout = false;
 
         Text = $"{AppInfo.DisplayName} — {UiText.Get("settings")}";
-        _tagline.Text = UiText.Get("tagline");
+        _tagline.Text = "Type in the right language";
         _versionBadge.Text = $"v{AppInfo.Version}";
 
         _correctionTitle.Text = UiText.Get("correction_section");
