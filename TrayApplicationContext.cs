@@ -176,14 +176,10 @@ public sealed class TrayApplicationContext : ApplicationContext
                 ",",
                 KeyboardLayout.AvailableLanguages.Select(KeyboardLayout.ShortName));
 
-            string dir = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "LayoutFixer");
-
-            System.IO.Directory.CreateDirectory(dir);
+            System.IO.Directory.CreateDirectory(AppRuntime.DataDirectory);
             System.IO.File.AppendAllText(
-                System.IO.Path.Combine(dir, "diagnostic.log"),
-                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {AppInfo.DisplayName} started. Installed supported layouts: [{available}]\r\n");
+                AppRuntime.GetDataPath("diagnostic.log"),
+                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {AppInfo.DisplayName} started. Portable={AppRuntime.IsPortable}. Installed supported layouts: [{available}]\r\n");
         }
         catch { }
     }
