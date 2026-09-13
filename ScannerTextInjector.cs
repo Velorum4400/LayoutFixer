@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace LayoutFixer;
@@ -9,8 +10,10 @@ internal static class ScannerTextInjector
 {
     private const uint INPUT_KEYBOARD = 1;
     private const uint KEYEVENTF_KEYUP = 0x0002;
-    private const uint KEYEVENTF_UNICODE = 0x0004;
-    private const ushort VK_BACK = 0x08;
+    private const ushort VK_SHIFT = 0x10;
+    private const ushort VK_CONTROL = 0x11;
+    private const ushort VK_LEFT = 0x25;
+    private const ushort VK_V = 0x56;
     private const ushort VK_RETURN = 0x0D;
     private const ushort VK_TAB = 0x09;
 
@@ -23,21 +26,105 @@ internal static class ScannerTextInjector
         }
 
         ScannerDiagnosticLog.Write(
-            $"Injection begin: text='{Sample(englishText)}', typedLength={typedLength}, suffix={suffix?.ToString() ?? "None"}");
+            $"Injection begin: text='{Sample(englishText)}', typedLength={typedLength}, suffix={suffix?.ToString() ?? "None"}, method=clipboard-paste");
 
-        var inputs = new List<INPUT>(typedLength * 2 + englishText.Length * 2 + 4);
+        IDataObject? originalClipboard = null;
+        try
+        {
+            originalClipboard = Clipboard.GetDataObject();
+        }
+        catch (Exception ex)
+        {
+            ScannerDiagnosticLog.WriteException("Failed to capture clipboard before scanner paste", ex);
+        }
 
-        for (int i = 0; i < typedLength; i++)
-            AddVirtualKey(inputs, VK_BACK);
+        if (!TrySetClipboardText(englishText))
+        {
+            ScannerDiagnosticLog.Write("Injection aborted because barcode text could not be placed on clipboard.");
+            return;
+        }
 
-        foreach (char c in englishText)
-            AddUnicode(inputs, c);
+        try
+        {
+            var inputs = new List<INPUT>(typedLength * 2 + 10);
 
-        if (suffix == Keys.Enter)
-            AddVirtualKey(inputs, VK_RETURN);
-        else if (suffix == Keys.Tab)
-            AddVirtualKey(inputs, VK_TAB);
+            AddKeyDown(inputs, VK_SHIFT);
+            for (int i = 0; i < typedLength; i++)
+                AddVirtualKey(inputs, VK_LEFT);
+            AddKeyUp(inputs, VK_SHIFT);
 
+            AddKeyDown(inputs, VK_CONTROL);
+            AddVirtualKey(inputs, VK_V);
+            AddKeyUp(inputs, VK_CONTROL);
+
+            Send(inputs, "select-and-paste");
+
+            // Give the foreground application time to process Ctrl+V before
+            // re-sending the scanner's original Enter/Tab suffix.
+            Thread.Sleep(70);
+
+            if (suffix is Keys.Enter or Keys.Tab)
+            {
+                var suffixInputs = new List<INPUT>(2);
+                AddVirtualKey(suffixInputs, suffix == Keys.Enter ? VK_RETURN : VK_TAB);
+                Send(suffixInputs, $"suffix-{suffix}");
+            }
+
+            Thread.Sleep(70);
+        }
+        finally
+        {
+            RestoreClipboard(originalClipboard);
+        }
+    }
+
+    private static bool TrySetClipboardText(string text)
+    {
+        for (int attempt = 1; attempt <= 10; attempt++)
+        {
+            try
+            {
+                Clipboard.SetText(text, TextDataFormat.UnicodeText);
+                ScannerDiagnosticLog.Write($"Scanner clipboard set successfully on attempt {attempt}.");
+                return true;
+            }
+            catch (ExternalException ex)
+            {
+                if (attempt == 10)
+                    ScannerDiagnosticLog.WriteException("Failed to set scanner clipboard text", ex);
+                else
+                    Thread.Sleep(15);
+            }
+        }
+
+        return false;
+    }
+
+    private static void RestoreClipboard(IDataObject? originalClipboard)
+    {
+        if (originalClipboard is null)
+            return;
+
+        for (int attempt = 1; attempt <= 10; attempt++)
+        {
+            try
+            {
+                Clipboard.SetDataObject(originalClipboard, true);
+                ScannerDiagnosticLog.Write($"Scanner clipboard restored on attempt {attempt}.");
+                return;
+            }
+            catch (ExternalException ex)
+            {
+                if (attempt == 10)
+                    ScannerDiagnosticLog.WriteException("Failed to restore clipboard after scanner paste", ex);
+                else
+                    Thread.Sleep(20);
+            }
+        }
+    }
+
+    private static void Send(List<INPUT> inputs, string stage)
+    {
         if (inputs.Count == 0)
             return;
 
@@ -46,10 +133,10 @@ internal static class ScannerTextInjector
         int error = Marshal.GetLastWin32Error();
 
         ScannerDiagnosticLog.Write(
-            $"Injection result: sent={sent}, expected={array.Length}, error={error}");
+            $"Injection stage '{stage}': sent={sent}, expected={array.Length}, error={error}");
 
         if (sent != array.Length)
-            CrashLogger.Write($"Scanner SendInput incomplete: sent={sent}, expected={array.Length}, error={error}");
+            CrashLogger.Write($"Scanner SendInput incomplete at {stage}: sent={sent}, expected={array.Length}, error={error}");
     }
 
     private static string Sample(string value)
@@ -60,6 +147,12 @@ internal static class ScannerTextInjector
 
     private static void AddVirtualKey(List<INPUT> inputs, ushort vk)
     {
+        AddKeyDown(inputs, vk);
+        AddKeyUp(inputs, vk);
+    }
+
+    private static void AddKeyDown(List<INPUT> inputs, ushort vk)
+    {
         inputs.Add(new INPUT
         {
             type = INPUT_KEYBOARD,
@@ -68,34 +161,16 @@ internal static class ScannerTextInjector
                 ki = new KEYBDINPUT { wVk = vk }
             }
         });
-
-        inputs.Add(new INPUT
-        {
-            type = INPUT_KEYBOARD,
-            U = new InputUnion
-            {
-                ki = new KEYBDINPUT { wVk = vk, dwFlags = KEYEVENTF_KEYUP }
-            }
-        });
     }
 
-    private static void AddUnicode(List<INPUT> inputs, char c)
+    private static void AddKeyUp(List<INPUT> inputs, ushort vk)
     {
         inputs.Add(new INPUT
         {
             type = INPUT_KEYBOARD,
             U = new InputUnion
             {
-                ki = new KEYBDINPUT { wScan = c, dwFlags = KEYEVENTF_UNICODE }
-            }
-        });
-
-        inputs.Add(new INPUT
-        {
-            type = INPUT_KEYBOARD,
-            U = new InputUnion
-            {
-                ki = new KEYBDINPUT { wScan = c, dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP }
+                ki = new KEYBDINPUT { wVk = vk, dwFlags = KEYEVENTF_KEYUP }
             }
         });
     }
