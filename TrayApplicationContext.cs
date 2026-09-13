@@ -10,6 +10,7 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly NotifyIcon _tray;
     private readonly Icon _appIcon;
     private readonly KeyboardHook _hook;
+    private readonly ScannerInputService _scanner;
     private readonly AppSettings _settings;
     private bool _processing;
     private readonly System.Windows.Forms.Timer _hotkeyTimer;
@@ -24,6 +25,8 @@ public sealed class TrayApplicationContext : ApplicationContext
         UiText.Language = _settings.Language;
         StartupManager.SetEnabled(_settings.StartWithWindows);
 
+        _scanner = new ScannerInputService(_settings);
+
         _appIcon = AppAssets.GetIcon();
 
         _tray = new NotifyIcon
@@ -37,7 +40,8 @@ public sealed class TrayApplicationContext : ApplicationContext
         _hook = new KeyboardHook
         {
             FullTextHotkey = _settings.FullTextHotkey,
-            LastWordHotkey = _settings.LastWordHotkey
+            LastWordHotkey = _settings.LastWordHotkey,
+            KeyDownFilter = key => _scanner.TryHandleTerminator(key)
         };
 
         _hotkeyTimer = new System.Windows.Forms.Timer { Interval = 60 };
@@ -141,7 +145,7 @@ public sealed class TrayApplicationContext : ApplicationContext
 
     private void OpenSettings()
     {
-        using var form = new SettingsForm(_settings);
+        using var form = new SettingsShellForm(_settings, _scanner);
 
         if (form.ShowDialog() == DialogResult.OK)
         {
@@ -153,6 +157,7 @@ public sealed class TrayApplicationContext : ApplicationContext
             _hook.LastWordHotkey =
                 _settings.LastWordHotkey;
 
+            _scanner.ApplySettings(_settings);
             _tray.ContextMenuStrip = BuildMenu();
         }
     }
@@ -162,6 +167,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         _hotkeyTimer.Stop();
         _hotkeyTimer.Dispose();
         _hook.Dispose();
+        _scanner.Dispose();
         _tray.Visible = false;
         _tray.Dispose();
         _appIcon.Dispose();
