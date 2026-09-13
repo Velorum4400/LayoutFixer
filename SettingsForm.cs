@@ -108,9 +108,9 @@ public sealed class SettingsForm : Form
         _wordLabel = MakeSelectableLabel(58, 147, 350, 52);
         _wordHotkey = MakeHotkeyButton(_settings.LastWordHotkey);
         _keepSelection = new CheckBox { Left = 28, Top = 214, Width = 22, Height = 28, Checked = _settings.KeepSelectionAfterCorrection, BackColor = Color.White };
-        _keepSelectionLabel = MakeSelectableLabel(58, 206, 460, 52);
+        _keepSelectionLabel = MakeSelectableLabel(58, 206, 460, 60);
         _keepSelectionLabel.Multiline = true;
-        _hotkeyHelp = MakeSelectableLabel(28, 278, 500, 70);
+        _hotkeyHelp = MakeSelectableLabel(28, 286, 500, 70);
         _hotkeyHelp.Multiline = true;
         _hotkeyHelp.Font = new Font("Segoe UI", 9.5F);
         _hotkeyHelp.ForeColor = Color.FromArgb(88, 101, 122);
@@ -190,10 +190,10 @@ public sealed class SettingsForm : Form
             _wordHotkey.SetBounds(28, 141, hotkeyWidth, 42);
             _fullLabel.SetBounds(labelRight - rtlTextWidth, 82, rtlTextWidth, 32);
             _wordLabel.SetBounds(labelRight - rtlTextWidth, 147, rtlTextWidth, 52);
-            _keepSelectionLabel.SetBounds(labelRight - rtlTextWidth, 206, rtlTextWidth, 52);
+            _keepSelectionLabel.SetBounds(labelRight - rtlTextWidth, 206, rtlTextWidth, 60);
             _correctionTitle.SetBounds(26, 16, Math.Max(200, _correctionCard.ClientSize.Width - 52), 46);
             _hotkeyHelp.Left = 28;
-            _hotkeyHelp.Top = 278;
+            _hotkeyHelp.Top = 286;
             _hotkeyHelp.Width = Math.Max(300, _correctionCard.ClientSize.Width - 56);
         }
         else
@@ -205,10 +205,10 @@ public sealed class SettingsForm : Form
             _wordHotkey.SetBounds(Math.Max(380, _correctionCard.ClientSize.Width - hotkeyWidth - 28), 141, hotkeyWidth, 42);
             _fullLabel.SetBounds(58, 82, textWidth, 32);
             _wordLabel.SetBounds(58, 147, textWidth, 52);
-            _keepSelectionLabel.SetBounds(58, 206, textWidth, 52);
+            _keepSelectionLabel.SetBounds(58, 206, textWidth, 60);
             _correctionTitle.SetBounds(26, 16, 360, 46);
             _hotkeyHelp.Left = 28;
-            _hotkeyHelp.Top = 278;
+            _hotkeyHelp.Top = 286;
             _hotkeyHelp.Width = Math.Max(300, _correctionCard.ClientSize.Width - 56);
         }
 
