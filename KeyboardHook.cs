@@ -26,6 +26,7 @@ public sealed class KeyboardHook : IDisposable
 
     private readonly HashSet<Keys> _pressed = new();
     private readonly HashSet<Keys> _suppressedKeys = new();
+    private readonly HashSet<Keys> _externallySuppressedKeys = new();
 
     private HotkeyAction? _pendingAction;
     private HashSet<Keys>? _pendingKeys;
@@ -36,6 +37,11 @@ public sealed class KeyboardHook : IDisposable
     private HashSet<Keys> _lastWordKeys = HotkeyDefinition.Parse("Insert");
 
     public event Action<HotkeyAction>? HotkeyPressed;
+
+    // Optional filter for physical key presses that need to be consumed before
+    // Windows delivers them to the foreground app. ScannerInputService uses
+    // this only for a detected scanner's Enter/Tab terminator.
+    public Func<Keys, bool>? KeyDownFilter { get; set; }
 
     public string FullTextHotkey
     {
@@ -120,6 +126,15 @@ public sealed class KeyboardHook : IDisposable
 
         if (down)
         {
+            if (_externallySuppressedKeys.Contains(key))
+                return (IntPtr)1;
+
+            if (KeyDownFilter?.Invoke(key) == true)
+            {
+                _externallySuppressedKeys.Add(key);
+                return (IntPtr)1;
+            }
+
             bool firstDown = _pressed.Add(key);
 
             if (firstDown && _pendingAction is null)
@@ -153,6 +168,9 @@ public sealed class KeyboardHook : IDisposable
 
         if (up)
         {
+            if (_externallySuppressedKeys.Remove(key))
+                return (IntPtr)1;
+
             _pressed.Remove(key);
 
             bool suppress =
