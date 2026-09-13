@@ -13,11 +13,9 @@ namespace LayoutFixer;
 public static class TextFixer
 {
     private const int VK_CONTROL = 0x11;
-    private const int VK_SHIFT = 0x10;
     private const int VK_A = 0x41;
     private const int VK_C = 0x43;
     private const int VK_V = 0x56;
-    private const int VK_LEFT = 0x25;
 
     private const uint KEYEVENTF_KEYUP = 0x0002;
     private const uint WM_INPUTLANGCHANGEREQUEST = 0x0050;
@@ -153,8 +151,9 @@ public static class TextFixer
                 return false;
             }
 
+            // Clipboard.SetText is synchronous. The old fixed 120 ms delay here
+            // only added latency before Ctrl+V and is not needed once SetText succeeds.
             Log("Converted text placed into clipboard");
-            Thread.Sleep(120);
 
             if (!Paste())
             {
@@ -163,7 +162,15 @@ public static class TextFixer
             }
 
             Log("Ctrl+V sent");
-            Thread.Sleep(180);
+
+            // Do not always wait a fixed 180 ms after paste. Observe the UIA
+            // selection/caret and continue as soon as the foreground app has
+            // applied the replacement. Controls without TextPattern keep a
+            // short conservative fallback wait so clipboard restoration remains safe.
+            WaitForPasteCompletion(
+                focusWindow != IntPtr.Zero ? focusWindow : targetWindow,
+                original,
+                converted);
 
             SwitchForegroundLayout(targetWindow, focusWindow, to);
             Log("Layout switch request sent");
@@ -346,7 +353,6 @@ public static class TextFixer
                 hkl);
     }
 
-
     private static void TryClearClipboard()
     {
         for (int i = 0; i < 10; i++)
@@ -361,6 +367,59 @@ public static class TextFixer
                 Thread.Sleep(40);
             }
         }
+    }
+
+    private static void WaitForPasteCompletion(
+        IntPtr hwnd,
+        string original,
+        string converted)
+    {
+        bool observedTextPattern = false;
+
+        for (int attempt = 0; attempt < 10; attempt++)
+        {
+            try
+            {
+                AutomationElement? element = AutomationElement.FocusedElement;
+                if (element == null && hwnd != IntPtr.Zero)
+                    element = AutomationElement.FromHandle(hwnd);
+
+                if (element != null &&
+                    element.TryGetCurrentPattern(TextPattern.Pattern, out object? patternObj))
+                {
+                    observedTextPattern = true;
+                    var textPattern = (TextPattern)patternObj;
+                    TextPatternRange[] ranges = textPattern.GetSelection();
+
+                    if (ranges != null && ranges.Length > 0)
+                    {
+                        string selected = ranges[0].GetText(-1);
+
+                        // Before the paste is processed the old selected text is
+                        // normally still exposed. A collapsed caret, the converted
+                        // text, or any changed selection means the edit was applied.
+                        if (string.IsNullOrEmpty(selected) ||
+                            string.Equals(selected, converted, StringComparison.Ordinal) ||
+                            !string.Equals(selected, original, StringComparison.Ordinal))
+                        {
+                            Log($"Paste completion observed through UI Automation on attempt {attempt + 1}");
+                            return;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Paste completion UIA check failed: {ex.GetType().Name}");
+                break;
+            }
+
+            Thread.Sleep(12);
+        }
+
+        // If UI Automation cannot tell us when the target consumed Ctrl+V,
+        // retain a short fallback delay before restoring the user's clipboard.
+        Thread.Sleep(observedTextPattern ? 20 : 80);
     }
 
     private static string? WaitForClipboardText(uint initialSequence, int attempts, bool allowSameSequence = false)
@@ -438,17 +497,16 @@ public static class TextFixer
     {
         try
         {
-            string dir = System.IO.Path.Combine(
+            string dir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "LayoutFixer");
-            System.IO.Directory.CreateDirectory(dir);
-            System.IO.File.AppendAllText(
-                System.IO.Path.Combine(dir, "diagnostic.log"),
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(
+                Path.Combine(dir, "diagnostic.log"),
                 $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {message}\r\n");
         }
         catch { }
     }
-
 
     private static string? TryGetSelectionOrSelectLastWordViaAutomation(IntPtr hwnd)
     {
@@ -469,9 +527,9 @@ public static class TextFixer
             var textPattern = (TextPattern)patternObj;
             TextPatternRange[] selections = textPattern.GetSelection();
 
-            // v0.16: if the user already selected text, preserve that exact
-            // selection and correct only it. Only fall back to the last word
-            // when the selection is empty (caret only).
+            // If the user already selected text, preserve that exact selection
+            // and correct only it. Only fall back to the last word when the
+            // selection is empty (caret only).
             if (selections != null && selections.Length > 0)
             {
                 string existingSelection = selections[0].GetText(-1);
@@ -761,14 +819,12 @@ public static class TextFixer
     [DllImport("user32.dll")]
     private static extern IntPtr GetKeyboardLayout(uint idThread);
 
-
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
-
 
     [DllImport("user32.dll")]
     private static extern uint GetClipboardSequenceNumber();
