@@ -8,7 +8,7 @@ internal static class ScannerDiagnosticLog
 {
     private static readonly object Sync = new();
 
-    public static string LogPath => AppRuntime.GetDataPath("scanner_diagnostic.log");
+    public static string LogPath => AppRuntime.GetDataPath("scaner_diagnostic.log");
 
     public static void Write(string message)
     {
