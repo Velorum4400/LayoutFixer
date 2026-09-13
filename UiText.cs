@@ -88,7 +88,7 @@ public static class UiText
         ["tagline"] = L("Type in the right language", "Печатай на нужном языке", "הקלד בשפה הנכונה"),
         ["correction_section"] = L("Text correction", "Исправление текста", "תיקון טקסט"),
         ["preferences_section"] = L("Preferences", "Общие настройки", "העדפות"),
-        ["installed_layouts"] = L("Installed layouts", "Установленные раскладки", "פריסות מותקנות"),
+        ["installed_layouts"] = L("Installed layouts", "Установленные раскладки", "שפות מותקנות"),
         ["new_features"] = L("New features:", "Новые функции:", "תכונות חדשות:"),
         ["fixes"] = L("Fixes:", "Исправления:", "תיקונים:"),
         ["none"] = L("None.", "Нет.", "אין.")
