@@ -22,6 +22,9 @@ public static class LayoutConverter
             "?!@#$%^&*()_+QWERTYUIOP{}ASDFGHJKL:\"ZXCVBNM<>?"
     };
 
+    private static readonly object RecoveryLock = new();
+    private static string? _lastLogicalHebrew;
+    private static DateTime _lastHebrewConversionUtc;
 
     public static KeyboardLanguage DetectLanguage(string text, KeyboardLanguage fallback)
     {
@@ -60,17 +63,94 @@ public static class LayoutConverter
         if (string.IsNullOrEmpty(text) || from == to)
             return text;
 
+        string sourceText = RecoverLogicalHebrewIfNeeded(text, from);
         string source = Maps[from];
         string target = Maps[to];
 
-        var result = new StringBuilder(text.Length);
+        var result = new StringBuilder(sourceText.Length);
 
-        foreach (char c in text)
+        foreach (char c in sourceText)
         {
             int index = source.IndexOf(c);
             result.Append(index >= 0 && index < target.Length ? target[index] : c);
         }
 
-        return result.ToString();
+        string converted = result.ToString();
+        RememberHebrewLogicalOrder(converted, to);
+        return converted;
+    }
+
+    private static string RecoverLogicalHebrewIfNeeded(
+        string text,
+        KeyboardLanguage from)
+    {
+        if (from != KeyboardLanguage.Hebrew)
+            return text;
+
+        lock (RecoveryLock)
+        {
+            if (string.IsNullOrEmpty(_lastLogicalHebrew))
+                return text;
+
+            // UI Automation in some RTL/LTR editors (notably modern Notepad)
+            // may return the visually arranged Hebrew text instead of its logical
+            // character order. Only reuse the previous logical form for a short
+            // time and only when the exact same characters are still present.
+            if (DateTime.UtcNow - _lastHebrewConversionUtc > TimeSpan.FromSeconds(10))
+            {
+                _lastLogicalHebrew = null;
+                return text;
+            }
+
+            if (!HaveSameCharacters(text, _lastLogicalHebrew))
+                return text;
+
+            return _lastLogicalHebrew;
+        }
+    }
+
+    private static void RememberHebrewLogicalOrder(
+        string converted,
+        KeyboardLanguage to)
+    {
+        lock (RecoveryLock)
+        {
+            if (to == KeyboardLanguage.Hebrew)
+            {
+                _lastLogicalHebrew = converted;
+                _lastHebrewConversionUtc = DateTime.UtcNow;
+            }
+            else
+            {
+                _lastLogicalHebrew = null;
+            }
+        }
+    }
+
+    private static bool HaveSameCharacters(string a, string b)
+    {
+        if (a.Length != b.Length)
+            return false;
+
+        var counts = new Dictionary<char, int>();
+
+        foreach (char c in a)
+        {
+            counts.TryGetValue(c, out int count);
+            counts[c] = count + 1;
+        }
+
+        foreach (char c in b)
+        {
+            if (!counts.TryGetValue(c, out int count) || count == 0)
+                return false;
+
+            if (count == 1)
+                counts.Remove(c);
+            else
+                counts[c] = count - 1;
+        }
+
+        return counts.Count == 0;
     }
 }
