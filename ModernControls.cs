@@ -14,7 +14,8 @@ public sealed class GradientHeaderPanel : Panel
         SetStyle(
             ControlStyles.AllPaintingInWmPaint |
             ControlStyles.OptimizedDoubleBuffer |
-            ControlStyles.UserPaint,
+            ControlStyles.UserPaint |
+            ControlStyles.ResizeRedraw,
             true);
     }
 
@@ -44,8 +45,21 @@ public sealed class CardPanel : Panel
         SetStyle(
             ControlStyles.AllPaintingInWmPaint |
             ControlStyles.OptimizedDoubleBuffer |
-            ControlStyles.UserPaint,
+            ControlStyles.UserPaint |
+            ControlStyles.ResizeRedraw,
             true);
+    }
+
+    protected override void OnResize(System.EventArgs eventargs)
+    {
+        base.OnResize(eventargs);
+        Invalidate();
+        Parent?.Invalidate(Bounds, true);
+    }
+
+    protected override void OnPaintBackground(PaintEventArgs e)
+    {
+        e.Graphics.Clear(BackColor);
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -56,6 +70,9 @@ public sealed class CardPanel : Panel
         Rectangle rect = ClientRectangle;
         rect.Width -= 1;
         rect.Height -= 1;
+
+        if (rect.Width <= 0 || rect.Height <= 0)
+            return;
 
         using GraphicsPath path = RoundedRect(rect, CornerRadius);
         using var pen = new Pen(BorderColor);
