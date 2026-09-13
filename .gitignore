@@ -1,6 +1,7 @@
 bin/
 obj/
 dist/
+installer/output/
 
 .vs/
 .vscode/
