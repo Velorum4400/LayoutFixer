@@ -22,8 +22,22 @@ public static class LayoutConverter
             "?!@#$%^&*()_+QWERTYUIOP{}ASDFGHJKL:\"ZXCVBNM<>?"
     };
 
+    // Avoid string.IndexOf for every character. Some Hebrew characters are
+    // duplicated in the physical-key map, so this dictionary intentionally
+    // keeps the first occurrence for ordinary standalone Hebrew conversion.
+    // Exact round-trips through Hebrew are handled separately below.
+    private static readonly Dictionary<KeyboardLanguage, Dictionary<char, int>> IndexMaps =
+        new()
+        {
+            [KeyboardLanguage.English] = BuildIndex(Maps[KeyboardLanguage.English]),
+            [KeyboardLanguage.Russian] = BuildIndex(Maps[KeyboardLanguage.Russian]),
+            [KeyboardLanguage.Hebrew] = BuildIndex(Maps[KeyboardLanguage.Hebrew])
+        };
+
     private static readonly object RecoveryLock = new();
     private static string? _lastLogicalHebrew;
+    private static string? _lastHebrewSourceText;
+    private static KeyboardLanguage _lastHebrewSourceLanguage;
     private static DateTime _lastHebrewConversionUtc;
 
     public static KeyboardLanguage DetectLanguage(string text, KeyboardLanguage fallback)
@@ -63,18 +77,45 @@ public static class LayoutConverter
         if (string.IsNullOrEmpty(text) || from == to)
             return text;
 
+        // Hebrew contains several characters that can represent more than one
+        // physical key position. For example '?' may come from different shifted
+        // keys. If this Hebrew text was produced by LayoutFixer moments ago, use
+        // the original source text/key positions instead of trying to reverse an
+        // inherently ambiguous Hebrew character map. This makes cycles such as
+        // RU -> HE -> EN -> RU lossless, including punctuation.
+        if (from == KeyboardLanguage.Hebrew &&
+            TryRecoverPreHebrewSource(text, out string? priorText, out KeyboardLanguage priorLanguage))
+        {
+            string exact = ConvertCore(priorText!, priorLanguage, to);
+            ClearHebrewRecovery();
+            return exact;
+        }
+
         string sourceText = RecoverLogicalHebrewIfNeeded(text, from);
-        string source = Maps[from];
+        string converted = ConvertCore(sourceText, from, to);
+
+        if (to == KeyboardLanguage.Hebrew)
+            RememberHebrewConversion(converted, text, from);
+        else
+            ClearHebrewRecovery();
+
+        return converted;
+    }
+
+    private static string ConvertCore(
+        string text,
+        KeyboardLanguage from,
+        KeyboardLanguage to)
+    {
         string target = Maps[to];
         string english = Maps[KeyboardLanguage.English];
+        Dictionary<char, int> sourceIndex = IndexMaps[from];
 
-        var result = new StringBuilder(sourceText.Length);
+        var result = new StringBuilder(text.Length);
 
-        foreach (char c in sourceText)
+        foreach (char c in text)
         {
-            int index = source.IndexOf(c);
-
-            if (index < 0 || index >= target.Length)
+            if (!sourceIndex.TryGetValue(c, out int index) || index >= target.Length)
             {
                 result.Append(c);
                 continue;
@@ -95,9 +136,7 @@ public static class LayoutConverter
             result.Append(target[index]);
         }
 
-        string converted = result.ToString();
-        RememberHebrewLogicalOrder(converted, to);
-        return converted;
+        return result.ToString();
     }
 
     private static string RecoverLogicalHebrewIfNeeded(
@@ -109,18 +148,8 @@ public static class LayoutConverter
 
         lock (RecoveryLock)
         {
-            if (string.IsNullOrEmpty(_lastLogicalHebrew))
+            if (!IsRecentHebrewRecovery() || string.IsNullOrEmpty(_lastLogicalHebrew))
                 return text;
-
-            // UI Automation in some RTL/LTR editors (notably modern Notepad)
-            // may return the visually arranged Hebrew text instead of its logical
-            // character order. Only reuse the previous logical form for a short
-            // time and only when the exact same characters are still present.
-            if (DateTime.UtcNow - _lastHebrewConversionUtc > TimeSpan.FromSeconds(10))
-            {
-                _lastLogicalHebrew = null;
-                return text;
-            }
 
             if (!HaveSameCharacters(text, _lastLogicalHebrew))
                 return text;
@@ -129,22 +158,77 @@ public static class LayoutConverter
         }
     }
 
-    private static void RememberHebrewLogicalOrder(
-        string converted,
-        KeyboardLanguage to)
+    private static bool TryRecoverPreHebrewSource(
+        string text,
+        out string? sourceText,
+        out KeyboardLanguage sourceLanguage)
     {
         lock (RecoveryLock)
         {
-            if (to == KeyboardLanguage.Hebrew)
+            sourceText = null;
+            sourceLanguage = KeyboardLanguage.English;
+
+            if (!IsRecentHebrewRecovery() ||
+                string.IsNullOrEmpty(_lastLogicalHebrew) ||
+                string.IsNullOrEmpty(_lastHebrewSourceText) ||
+                _lastHebrewSourceLanguage == KeyboardLanguage.Hebrew)
             {
-                _lastLogicalHebrew = converted;
-                _lastHebrewConversionUtc = DateTime.UtcNow;
+                return false;
             }
-            else
-            {
-                _lastLogicalHebrew = null;
-            }
+
+            if (!HaveSameCharacters(text, _lastLogicalHebrew))
+                return false;
+
+            sourceText = _lastHebrewSourceText;
+            sourceLanguage = _lastHebrewSourceLanguage;
+            return true;
         }
+    }
+
+    private static void RememberHebrewConversion(
+        string converted,
+        string sourceText,
+        KeyboardLanguage sourceLanguage)
+    {
+        lock (RecoveryLock)
+        {
+            _lastLogicalHebrew = converted;
+            _lastHebrewSourceText = sourceText;
+            _lastHebrewSourceLanguage = sourceLanguage;
+            _lastHebrewConversionUtc = DateTime.UtcNow;
+        }
+    }
+
+    private static bool IsRecentHebrewRecovery()
+    {
+        if (DateTime.UtcNow - _lastHebrewConversionUtc <= TimeSpan.FromSeconds(10))
+            return true;
+
+        _lastLogicalHebrew = null;
+        _lastHebrewSourceText = null;
+        return false;
+    }
+
+    private static void ClearHebrewRecovery()
+    {
+        lock (RecoveryLock)
+        {
+            _lastLogicalHebrew = null;
+            _lastHebrewSourceText = null;
+        }
+    }
+
+    private static Dictionary<char, int> BuildIndex(string map)
+    {
+        var result = new Dictionary<char, int>();
+
+        for (int i = 0; i < map.Length; i++)
+        {
+            if (!result.ContainsKey(map[i]))
+                result[map[i]] = i;
+        }
+
+        return result;
     }
 
     private static bool HaveSameCharacters(string a, string b)
