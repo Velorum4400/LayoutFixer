@@ -27,12 +27,14 @@ public sealed class SettingsForm : Form
     private CheckBox _startup = null!;
     private CheckBox _full = null!;
     private CheckBox _word = null!;
+    private CheckBox _keepSelection = null!;
     private ModernButton _fullHotkey = null!;
     private ModernButton _wordHotkey = null!;
 
     private SelectableLabel _languageLabel = null!;
     private SelectableLabel _fullLabel = null!;
     private SelectableLabel _wordLabel = null!;
+    private SelectableLabel _keepSelectionLabel = null!;
     private SelectableLabel _hotkeyHelp = null!;
     private SelectableLabel _info = null!;
     private SelectableLabel _availableLayouts = null!;
@@ -51,8 +53,8 @@ public sealed class SettingsForm : Form
         Text = AppInfo.DisplayName;
         Icon = AppAssets.GetIcon();
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(1320, 790);
-        MinimumSize = new Size(1320, 780);
+        ClientSize = new Size(1500, 790);
+        MinimumSize = new Size(1500, 780);
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = true;
         MinimizeBox = true;
@@ -105,11 +107,13 @@ public sealed class SettingsForm : Form
         _word = new CheckBox { Left = 28, Top = 151, Width = 22, Height = 28, Checked = _settings.LastWordEnabled, BackColor = Color.White };
         _wordLabel = MakeSelectableLabel(58, 147, 350, 52);
         _wordHotkey = MakeHotkeyButton(_settings.LastWordHotkey);
-        _hotkeyHelp = MakeSelectableLabel(28, 225, 500, 82);
+        _keepSelection = new CheckBox { Left = 28, Top = 214, Width = 22, Height = 28, Checked = _settings.KeepSelectionAfterCorrection, BackColor = Color.White };
+        _keepSelectionLabel = MakeSelectableLabel(58, 210, 460, 36);
+        _hotkeyHelp = MakeSelectableLabel(28, 266, 500, 70);
         _hotkeyHelp.Multiline = true;
         _hotkeyHelp.Font = new Font("Segoe UI", 9.5F);
         _hotkeyHelp.ForeColor = Color.FromArgb(88, 101, 122);
-        _correctionCard.Controls.AddRange(new Control[] { _correctionTitle, _full, _fullLabel, _fullHotkey, _word, _wordLabel, _wordHotkey, _hotkeyHelp });
+        _correctionCard.Controls.AddRange(new Control[] { _correctionTitle, _full, _fullLabel, _fullHotkey, _word, _wordLabel, _wordHotkey, _keepSelection, _keepSelectionLabel, _hotkeyHelp });
     }
 
     private void BuildPreferencesCard()
@@ -180,10 +184,12 @@ public sealed class SettingsForm : Form
             int rtlTextWidth = Math.Max(300, labelRight - hotkeyWidth - 76);
             _full.SetBounds(checkboxX, 86, 22, 28);
             _word.SetBounds(checkboxX, 151, 22, 28);
+            _keepSelection.SetBounds(checkboxX, 214, 22, 28);
             _fullHotkey.SetBounds(28, 76, hotkeyWidth, 42);
             _wordHotkey.SetBounds(28, 141, hotkeyWidth, 42);
             _fullLabel.SetBounds(labelRight - rtlTextWidth, 82, rtlTextWidth, 32);
             _wordLabel.SetBounds(labelRight - rtlTextWidth, 147, rtlTextWidth, 52);
+            _keepSelectionLabel.SetBounds(labelRight - rtlTextWidth, 210, rtlTextWidth, 36);
             _correctionTitle.SetBounds(26, 16, Math.Max(200, _correctionCard.ClientSize.Width - 52), 46);
             _hotkeyHelp.Left = 28;
             _hotkeyHelp.Width = Math.Max(300, _correctionCard.ClientSize.Width - 56);
@@ -192,10 +198,12 @@ public sealed class SettingsForm : Form
         {
             _full.SetBounds(28, 86, 22, 28);
             _word.SetBounds(28, 151, 22, 28);
+            _keepSelection.SetBounds(28, 214, 22, 28);
             _fullHotkey.SetBounds(Math.Max(380, _correctionCard.ClientSize.Width - hotkeyWidth - 28), 76, hotkeyWidth, 42);
             _wordHotkey.SetBounds(Math.Max(380, _correctionCard.ClientSize.Width - hotkeyWidth - 28), 141, hotkeyWidth, 42);
             _fullLabel.SetBounds(58, 82, textWidth, 32);
             _wordLabel.SetBounds(58, 147, textWidth, 52);
+            _keepSelectionLabel.SetBounds(58, 210, textWidth, 36);
             _correctionTitle.SetBounds(26, 16, 360, 46);
             _hotkeyHelp.Left = 28;
             _hotkeyHelp.Width = Math.Max(300, _correctionCard.ClientSize.Width - 56);
@@ -252,6 +260,7 @@ public sealed class SettingsForm : Form
         _startup.Text = UiText.Get("startup");
         _fullLabel.Text = UiText.Get("full_text");
         _wordLabel.Text = UiText.Get("selection_word");
+        _keepSelectionLabel.Text = UiText.Get("keep_selection");
         _hotkeyHelp.Text = UiText.Get("hotkey_hint");
         _installedTitle.Text = UiText.Get("installed_layouts");
         _info.Text = UiText.Get("supported_info");
@@ -262,10 +271,8 @@ public sealed class SettingsForm : Form
         _save.Text = UiText.Get("save");
 
         RightToLeft textDirection = rtl ? RightToLeft.Yes : RightToLeft.No;
-        // WinForms mirrors alignment semantics when RightToLeft=Yes. Using Left here
-        // therefore places Hebrew at the physical right edge of these controls.
-        HorizontalAlignment textAlignment = rtl ? HorizontalAlignment.Left : HorizontalAlignment.Left;
-        ContentAlignment labelAlignment = rtl ? ContentAlignment.MiddleLeft : ContentAlignment.MiddleLeft;
+        HorizontalAlignment textAlignment = HorizontalAlignment.Left;
+        ContentAlignment labelAlignment = ContentAlignment.MiddleLeft;
 
         _correctionTitle.RightToLeft = textDirection; _correctionTitle.TextAlign = labelAlignment;
         _preferencesTitle.RightToLeft = textDirection; _preferencesTitle.TextAlign = labelAlignment;
@@ -273,6 +280,7 @@ public sealed class SettingsForm : Form
         _languageLabel.RightToLeft = textDirection; _languageLabel.TextAlign = textAlignment;
         _fullLabel.RightToLeft = textDirection; _fullLabel.TextAlign = textAlignment;
         _wordLabel.RightToLeft = textDirection; _wordLabel.TextAlign = textAlignment;
+        _keepSelectionLabel.RightToLeft = textDirection; _keepSelectionLabel.TextAlign = textAlignment;
         _hotkeyHelp.RightToLeft = textDirection; _hotkeyHelp.TextAlign = textAlignment;
         _availableLayouts.RightToLeft = textDirection; _availableLayouts.TextAlign = textAlignment;
         _info.RightToLeft = textDirection; _info.TextAlign = textAlignment;
@@ -302,6 +310,7 @@ public sealed class SettingsForm : Form
         _startup.Checked = defaults.StartWithWindows;
         _full.Checked = defaults.FullTextEnabled;
         _word.Checked = defaults.LastWordEnabled;
+        _keepSelection.Checked = defaults.KeepSelectionAfterCorrection;
         _fullHotkey.Text = defaults.FullTextHotkey;
         _wordHotkey.Text = defaults.LastWordHotkey;
         UiText.Language = defaults.Language;
@@ -343,6 +352,7 @@ public sealed class SettingsForm : Form
         _settings.StartWithWindows = _startup.Checked;
         _settings.FullTextEnabled = _full.Checked;
         _settings.LastWordEnabled = _word.Checked;
+        _settings.KeepSelectionAfterCorrection = _keepSelection.Checked;
         _settings.FullTextHotkey = full;
         _settings.LastWordHotkey = word;
         _settings.Language = (_language.SelectedItem as LanguageItem)?.Code ?? "en";
