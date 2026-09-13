@@ -42,7 +42,7 @@ public sealed class ScannerInputService : IDisposable
     private readonly Dictionary<IntPtr, ScannerDeviceInfo> _deviceCache = new();
     private readonly StringBuilder _runtimeBuffer = new();
     private readonly StringBuilder _identifyBuffer = new();
-    private readonly Timer _completionTimer;
+    private readonly System.Windows.Forms.Timer _completionTimer;
 
     private AppSettings _settings;
     private IntPtr _identifyDevice;
@@ -60,7 +60,7 @@ public sealed class ScannerInputService : IDisposable
         _settings = settings;
         _window = new RawInputWindow(this);
 
-        _completionTimer = new Timer { Interval = 140 };
+        _completionTimer = new System.Windows.Forms.Timer { Interval = 140 };
         _completionTimer.Tick += (_, _) =>
         {
             _completionTimer.Stop();
@@ -79,6 +79,7 @@ public sealed class ScannerInputService : IDisposable
 
     public void BeginIdentification()
     {
+        ResetRuntimeBuffer();
         IdentificationActive = true;
         _identifyDevice = IntPtr.Zero;
         _identifyBuffer.Clear();
@@ -100,6 +101,9 @@ public sealed class ScannerInputService : IDisposable
     // the same suffix back after the English text has been inserted.
     public bool TryHandleTerminator(Keys key)
     {
+        if (IdentificationActive)
+            return false;
+
         if (!_settings.ScannerEnabled || key is not (Keys.Enter or Keys.Tab))
             return false;
 
@@ -145,7 +149,10 @@ public sealed class ScannerInputService : IDisposable
             ScannerDeviceInfo device = GetDeviceInfo(raw.header.hDevice);
 
             if (IdentificationActive)
+            {
                 ProcessIdentification(raw.header.hDevice, device, vk, down, up);
+                return;
+            }
 
             if (_settings.ScannerEnabled && MatchesSelectedScanner(device))
                 ProcessRuntime(vk, down, up);
@@ -284,7 +291,7 @@ public sealed class ScannerInputService : IDisposable
         if (size == 0)
             return "";
 
-        IntPtr buffer = Marshal.AllocHGlobal(checked((int)size * 2));
+        IntPtr buffer = Marshal.AllocHGlobal(checked(((int)size + 1) * 2));
         try
         {
             uint chars = size;
