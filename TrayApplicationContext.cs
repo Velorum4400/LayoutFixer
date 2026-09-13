@@ -125,19 +125,13 @@ public sealed class TrayApplicationContext : ApplicationContext
                     ? SelectionPreserver.CaptureSelection()
                     : null;
 
-            if (TextFixer.TryFix(
+            TextFixer.TryFix(
                 lastWord,
+                selectionSnapshot,
                 out KeyboardLanguage from,
-                out KeyboardLanguage to))
-            {
-                // Restore only a selection that existed before correction.
-                // Reusing the captured UIA range is usually immediate; controls
-                // that invalidate it fall back to a short caret-based restore.
-                if (selectionSnapshot?.HasSelection == true)
-                    SelectionPreserver.RestoreSelection(selectionSnapshot);
+                out KeyboardLanguage to);
 
-                // No balloon notification: the correction itself is the feedback.
-            }
+            // No balloon notification: the correction itself is the feedback.
         }
         finally
         {
