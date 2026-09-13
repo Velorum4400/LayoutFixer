@@ -81,8 +81,8 @@ public sealed class SettingsShellForm : Form
         Text = $"{AppInfo.DisplayName} — {UiText.Get("settings")}";
         Icon = AppAssets.GetIcon();
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(1180, 760);
-        MinimumSize = new Size(1050, 700);
+        ClientSize = new Size(1180, 860);
+        MinimumSize = new Size(1050, 800);
         BackColor = Color.FromArgb(244, 247, 252);
         Font = new Font("Segoe UI", 10F);
 
@@ -313,21 +313,21 @@ public sealed class SettingsShellForm : Form
         _detectScanner.Primary = true;
         _detectScanner.Click += (_, _) => BeginScannerDetection();
 
-        _deviceTitle.SetBounds(34, 238, 760, 27);
+        _deviceTitle.SetBounds(34, 228, 760, 27);
         StyleCaption(_deviceTitle);
-        _deviceValue.SetBounds(34, 270, 800, 52);
+        _deviceValue.SetBounds(34, 260, 800, 82);
         _deviceValue.Font = new Font("Segoe UI", 10.5F, FontStyle.Bold);
         _deviceValue.ForeColor = Color.FromArgb(30, 65, 105);
 
-        _barcodeTitle.SetBounds(34, 342, 760, 27);
+        _barcodeTitle.SetBounds(34, 362, 760, 27);
         StyleCaption(_barcodeTitle);
-        _barcodeValue.SetBounds(34, 374, 800, 32);
+        _barcodeValue.SetBounds(34, 394, 800, 36);
         _barcodeValue.Font = new Font("Consolas", 10.5F);
         _barcodeValue.ForeColor = Color.FromArgb(20, 112, 235);
 
-        _scannerInfo.SetBounds(34, 438, 800, 66);
+        _scannerInfo.SetBounds(34, 456, 800, 86);
         _scannerInfo.ForeColor = Color.FromArgb(65, 82, 108);
-        _scannerNote.SetBounds(34, 516, 800, 34);
+        _scannerNote.SetBounds(34, 556, 800, 58);
         _scannerNote.ForeColor = Color.FromArgb(126, 86, 18);
 
         card.Controls.AddRange(new Control[]
@@ -415,6 +415,7 @@ public sealed class SettingsShellForm : Form
         _lastBarcode = "";
         _scanBox.Text = UiText.Get("scanner_waiting");
         _barcodeValue.Text = "—";
+        ScannerDiagnosticLog.Write("Scanner detection requested from Settings UI.");
         _scanner.BeginIdentification();
     }
 
@@ -438,6 +439,8 @@ public sealed class SettingsShellForm : Form
         _scanBox.Text = barcode;
         _barcodeValue.Text = barcode;
         UpdateScannerDeviceText();
+        ScannerDiagnosticLog.Write(
+            $"Settings UI accepted scanner: {device.DisplayName}; barcode='{barcode}'");
     }
 
     private void UpdateScannerDeviceText()
@@ -502,6 +505,9 @@ public sealed class SettingsShellForm : Form
         StartupManager.SetEnabled(_settings.StartWithWindows);
         _settings.Save();
         _scanner.ApplySettings(_settings);
+
+        ScannerDiagnosticLog.Write(
+            $"Settings saved. scannerEnabled={_settings.ScannerEnabled}, device='{_settings.ScannerDisplayName}', VID={_settings.ScannerVendorId}, PID={_settings.ScannerProductId}");
 
         DialogResult = DialogResult.OK;
         Close();
