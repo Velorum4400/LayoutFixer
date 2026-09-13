@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 
@@ -8,6 +9,7 @@ public sealed class ChangeLogForm : Form
 {
     private readonly RichTextBox _changes;
     private readonly string _language;
+    private readonly HashSet<string> _listedVersions = new(StringComparer.OrdinalIgnoreCase);
 
     public ChangeLogForm(string language)
     {
@@ -39,6 +41,58 @@ public sealed class ChangeLogForm : Form
         };
 
         Controls.Add(_changes);
+
+        AddVersion(
+            "v1.0.6",
+            new[]
+            {
+                T(
+                    "Added a Clear log button with confirmation and success/error result states.",
+                    "Добавлена кнопка «Очистить лог» с подтверждением и сообщением об успешном результате или ошибке.",
+                    "נוסף כפתור לניקוי הלוג עם אישור והודעת הצלחה או שגיאה."),
+                T(
+                    "Errors while clearing diagnostic.log are written to error.log.",
+                    "Ошибки при очистке diagnostic.log записываются в error.log.",
+                    "שגיאות בעת ניקוי diagnostic.log נרשמות אל error.log.")
+            },
+            new[]
+            {
+                T(
+                    "Increased the minimum Settings window width so the long correction option is not clipped.",
+                    "Увеличена минимальная ширина окна настроек, чтобы длинная настройка исправления текста не обрезалась.",
+                    "הוגדל הרוחב המינימלי של חלון ההגדרות כדי שטקסט אפשרות התיקון הארוכה לא ייחתך."),
+                T(
+                    "Made the Hebrew header identical to the English header and applied right-to-left direction directly to Hebrew text controls.",
+                    "Верхний блок Hebrew-интерфейса сделан идентичным английскому, а направление справа налево применяется непосредственно к текстовым элементам.",
+                    "הכותרת העליונה בממשק העברי זהה כעת לאנגלית, וכיוון מימין לשמאל מוחל ישירות על רכיבי הטקסט."),
+                T(
+                    "Added a fallback so the current application version is always represented in the change log.",
+                    "Добавлена страховка: текущая версия приложения всегда будет присутствовать в списке изменений.",
+                    "נוספה הגנה כך שגרסת היישום הנוכחית תמיד תופיע ביומן השינויים.")
+            });
+
+        AddVersion(
+            "v1.0.5",
+            Array.Empty<string>(),
+            new[]
+            {
+                T(
+                    "Increased the minimum Settings window height to prevent the available-languages information from being clipped.",
+                    "Увеличена минимальная высота окна настроек, чтобы информация о доступных языках не обрезалась.",
+                    "הוגדל הגובה המינימלי של חלון ההגדרות כדי שמידע על השפות הזמינות לא ייחתך."),
+                T(
+                    "The tagline under LayoutFixer now always stays in English.",
+                    "Фраза под LayoutFixer теперь всегда остаётся на английском.",
+                    "שורת המשנה מתחת ל-LayoutFixer נשארת תמיד באנגלית."),
+                T(
+                    "Adjusted Hebrew Settings layout: header position preserved, correction controls mirrored as requested, and Hebrew labels aligned to the right.",
+                    "Скорректирован интерфейс на иврите: верхний блок сохраняет положение, элементы исправления текста переставлены, а подписи выровнены вправо.",
+                    "ממשק ההגדרות בעברית הותאם: מיקום הכותרת נשמר, רכיבי תיקון הטקסט הוחלפו והכיתובים מיושרים לימין."),
+                T(
+                    "Changed the Hebrew Installed layouts label to Installed languages.",
+                    "Подпись «Установленные раскладки» на иврите заменена на «Установленные языки».",
+                    "הכיתוב הוחלף ל-שפות מותקנות.")
+            });
 
         AddVersion(
             "v1.0.4",
@@ -298,6 +352,7 @@ public sealed class ChangeLogForm : Form
                     "הוסרה אפשרות ההתראות במגש המערכת.")
             });
 
+        EnsureCurrentVersionListed();
         _changes.SelectionStart = 0;
         _changes.SelectionLength = 0;
     }
@@ -307,11 +362,31 @@ public sealed class ChangeLogForm : Form
         _language == "he" ? he :
         en;
 
+    private void EnsureCurrentVersionListed()
+    {
+        string current = "v" + AppInfo.Version;
+        if (_listedVersions.Contains(current))
+            return;
+
+        AddVersion(
+            current,
+            Array.Empty<string>(),
+            new[]
+            {
+                T(
+                    "This version is not yet described in detail in the built-in change log.",
+                    "Для этой версии ещё не добавлено подробное описание изменений.",
+                    "לגרסה זו עדיין לא נוסף תיאור מפורט ביומן השינויים.")
+            });
+    }
+
     private void AddVersion(
         string version,
         string[] features,
         string[] fixes)
     {
+        _listedVersions.Add(version);
+
         if (_changes.TextLength > 0)
         {
             AppendNormal("\r\n");
