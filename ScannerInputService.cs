@@ -119,6 +119,29 @@ public sealed class ScannerInputService : IDisposable
         _identifyShift = false;
     }
 
+    public bool TryConsumeTerminator(Keys key)
+    {
+        if (!_settings.ScannerEnabled || IdentificationActive || key is not (Keys.Enter or Keys.Tab))
+            return false;
+
+        if (_runtimeBuffer.Length < Math.Max(1, _settings.ScannerMinimumLength))
+            return false;
+
+        double ageMs = (DateTime.UtcNow - _lastRuntimeInputUtc).TotalMilliseconds;
+        if (ageMs > 350)
+            return false;
+
+        string text = _runtimeBuffer.ToString();
+        int typedLength = _runtimeBuffer.Length;
+        ResetRuntimeBuffer();
+
+        ScannerDiagnosticLog.Write(
+            $"Runtime terminator correlated in low-level hook. key={key}, ageMs={ageMs:F1}, text='{Sample(text)}', typedLength={typedLength}");
+
+        _window.Post(() => ScannerTextInjector.ReplacePreviousText(text, typedLength, key));
+        return true;
+    }
+
     private void ProcessRawInput(IntPtr rawInputHandle)
     {
         try
@@ -222,7 +245,8 @@ public sealed class ScannerInputService : IDisposable
         {
             if (_runtimeBuffer.Length >= Math.Max(1, _settings.ScannerMinimumLength))
             {
-                ScannerDiagnosticLog.Write($"Runtime scan terminator received. key={(vk == 0x0D ? "Enter" : "Tab")}, length={_runtimeBuffer.Length}");
+                ScannerDiagnosticLog.Write(
+                    $"Raw Input terminator reached runtime buffer before hook consumed it. key={(vk == 0x0D ? "Enter" : "Tab")}, length={_runtimeBuffer.Length}");
                 CompleteRuntimeScan(null);
             }
             return;
