@@ -18,7 +18,7 @@ public static class LayoutConverter
             "Ё!\"№;%:?*()_+ЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭЯЧСМИТЬБЮ,",
 
         [KeyboardLanguage.Hebrew] =
-            "/1234567890-=/'קראטוןםפ[]שדגכעיחלךף',זסבהנמצתץ." +
+            "/1234567890-=/'קראטוןםפ[]שדגכעיחלךף,זסבהנמצתץ." +
             "?!@#$%^&*()_+QWERTYUIOP{}ASDFGHJKL:\"ZXCVBNM<>?"
     };
 
@@ -66,13 +66,33 @@ public static class LayoutConverter
         string sourceText = RecoverLogicalHebrewIfNeeded(text, from);
         string source = Maps[from];
         string target = Maps[to];
+        string english = Maps[KeyboardLanguage.English];
 
         var result = new StringBuilder(sourceText.Length);
 
         foreach (char c in sourceText)
         {
             int index = source.IndexOf(c);
-            result.Append(index >= 0 && index < target.Length ? target[index] : c);
+
+            if (index < 0 || index >= target.Length)
+            {
+                result.Append(c);
+                continue;
+            }
+
+            // Hebrew has no uppercase alphabet. When the source character came
+            // from a shifted alphabetic key, keep that key as an English capital
+            // instead of converting it to a Hebrew character/punctuation mark.
+            if (to == KeyboardLanguage.Hebrew &&
+                index < english.Length &&
+                char.IsUpper(english[index]) &&
+                char.IsLetter(english[index]))
+            {
+                result.Append(english[index]);
+                continue;
+            }
+
+            result.Append(target[index]);
         }
 
         string converted = result.ToString();
