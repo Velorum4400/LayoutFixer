@@ -42,6 +42,22 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.1.0", new[]
+        {
+            T(
+                "Added a Windows installer built with Inno Setup.",
+                "Добавлен установщик Windows на базе Inno Setup.",
+                "נוסף מתקין Windows המבוסס על Inno Setup."),
+            T(
+                "build.cmd now publishes LayoutFixer and creates a versioned Setup EXE automatically.",
+                "build.cmd теперь публикует LayoutFixer и автоматически создаёт установщик Setup EXE с номером версии.",
+                "build.cmd מפרסם כעת את LayoutFixer ויוצר אוטומטית מתקין Setup EXE עם מספר הגרסה."),
+            T(
+                "The installer adds LayoutFixer to Installed apps and the Start menu, with an optional desktop shortcut and launch after setup.",
+                "Установщик добавляет LayoutFixer в список установленных приложений и меню «Пуск», с дополнительным ярлыком на рабочем столе и запуском после установки.",
+                "המתקין מוסיף את LayoutFixer לרשימת היישומים המותקנים ולתפריט התחל, עם קיצור דרך אופציונלי בשולחן העבודה והפעלה לאחר ההתקנה.")
+        }, Array.Empty<string>());
+
         AddVersion("v1.0.13", Array.Empty<string>(), new[]
         {
             T(
