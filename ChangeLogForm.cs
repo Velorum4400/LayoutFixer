@@ -43,6 +43,57 @@ public sealed class ChangeLogForm : Form
         Controls.Add(_changes);
 
         AddVersion(
+            "v1.0.9",
+            Array.Empty<string>(),
+            new[]
+            {
+                T(
+                    "Made round-trips through Hebrew preserve ambiguous punctuation exactly.",
+                    "Исправлена потеря пунктуации при циклическом преобразовании текста через иврит.",
+                    "תוקנה שמירת סימני הפיסוק במעברים מחזוריים דרך עברית."),
+                T(
+                    "Updated the keep-selection option text and enabled wrapping for long selectable labels.",
+                    "Уточнён текст настройки сохранения выделения и добавлен перенос длинных подписей на следующую строку.",
+                    "עודכן טקסט אפשרות שמירת הסימון ונוספה גלישת שורות לכיתובים ארוכים."),
+                T(
+                    "Reduced selection restore latency by replacing fixed paste delays with adaptive UI Automation checks and short retries.",
+                    "Уменьшена задержка возврата выделения: фиксированные паузы после вставки заменены адаптивной проверкой UI Automation и короткими повторами.",
+                    "קוצר זמן שחזור הסימון באמצעות בדיקות UI Automation אדפטיביות במקום השהיות קבועות."),
+                T(
+                    "Optimized layout conversion by using precomputed character-to-key indexes instead of repeated linear searches.",
+                    "Оптимизировано преобразование раскладок: вместо повторного линейного поиска используются заранее построенные индексы символов.",
+                    "הומר מנגנון חיפוש התווים לאינדקסים מוכנים מראש לצורך ביצועים טובים יותר.")
+            });
+
+        AddVersion(
+            "v1.0.8",
+            new[]
+            {
+                T(
+                    "Added an option to keep corrected selected text selected after correction.",
+                    "Добавлена настройка, позволяющая оставлять исправленный выделенный текст выделенным после исправления.",
+                    "נוספה אפשרות להשאיר את הטקסט המתוקן מסומן לאחר התיקון.")
+            },
+            new[]
+            {
+                T(
+                    "Further increased the Settings window width and refined Hebrew text alignment.",
+                    "Дополнительно увеличена ширина окна настроек и уточнено выравнивание текста на иврите.",
+                    "הוגדל שוב רוחב חלון ההגדרות ושופר יישור הטקסט בעברית.")
+            });
+
+        AddVersion(
+            "v1.0.7",
+            Array.Empty<string>(),
+            new[]
+            {
+                T(
+                    "Increased the minimum Settings width and corrected Hebrew right-to-left alignment based on the actual rendered interface.",
+                    "Увеличена минимальная ширина окна настроек и исправлено выравнивание Hebrew-интерфейса справа налево по фактическому отображению.",
+                    "הוגדל הרוחב המינימלי של ההגדרות ותוקן יישור הממשק העברי מימין לשמאל לפי התצוגה בפועל.")
+            });
+
+        AddVersion(
             "v1.0.6",
             new[]
             {
