@@ -41,6 +41,74 @@ public sealed class ChangeLogForm : Form
         Controls.Add(_changes);
 
         AddVersion(
+            "v1.0.4",
+            Array.Empty<string>(),
+            new[]
+            {
+                T(
+                    "Added the missing changelog entries for versions 1.0.1 through 1.0.3.",
+                    "Добавлены отсутствующие записи списка изменений для версий 1.0.1–1.0.3.",
+                    "נוספו רשומות חסרות ביומן השינויים עבור גרסאות 1.0.1–1.0.3."),
+                T(
+                    "Fixed clipping of the LayoutFixer title and slightly increased the minimum Settings window height.",
+                    "Исправлено обрезание заголовка LayoutFixer и немного увеличена минимальная высота окна настроек.",
+                    "תוקן חיתוך הכותרת LayoutFixer והוגדל מעט הגובה המינימלי של חלון ההגדרות."),
+                T(
+                    "Fixed card border painting artifacts while resizing the Settings window.",
+                    "Исправлены артефакты отрисовки границ карточек при изменении размера окна настроек.",
+                    "תוקנו ארטיפקטים בציור גבולות הכרטיסים בעת שינוי גודל חלון ההגדרות.")
+            });
+
+        AddVersion(
+            "v1.0.3",
+            new[]
+            {
+                T(
+                    "When converting to Hebrew, uppercase letter positions now remain uppercase English letters.",
+                    "При преобразовании в иврит позиции заглавных букв теперь остаются заглавными английскими буквами.",
+                    "בהמרה לעברית, מיקומי אותיות רישיות נשארים כעת אותיות אנגליות רישיות.")
+            },
+            new[]
+            {
+                T(
+                    "Corrected the Hebrew keyboard mapping and increased space for several Settings labels and informational text.",
+                    "Исправлена таблица соответствий ивритской раскладки и увеличено место для нескольких надписей и информационного текста в настройках.",
+                    "תוקנה מפת המקלדת העברית והוגדל המקום עבור מספר כותרות וטקסט מידע בהגדרות.")
+            });
+
+        AddVersion(
+            "v1.0.2",
+            Array.Empty<string>(),
+            new[]
+            {
+                T(
+                    "Fixed mixed RTL/LTR Hebrew conversion order when UI Automation returns visually reordered text.",
+                    "Исправлен порядок текста при преобразовании через иврит, когда UI Automation возвращает смешанный RTL/LTR-текст в визуальном порядке.",
+                    "תוקן סדר הטקסט בהמרה דרך עברית כאשר UI Automation מחזיר טקסט RTL/LTR מעורב בסדר חזותי.")
+            });
+
+        AddVersion(
+            "v1.0.1",
+            new[]
+            {
+                T(
+                    "Added global crash logging to %APPDATA%\\LayoutFixer\\crash.log.",
+                    "Добавлено глобальное логирование сбоев в %APPDATA%\\LayoutFixer\\crash.log.",
+                    "נוסף רישום קריסות גלובלי אל %APPDATA%\\LayoutFixer\\crash.log."),
+                T(
+                    "Added detailed diagnostics for interface language switching.",
+                    "Добавлена подробная диагностика переключения языка интерфейса.",
+                    "נוספה אבחנה מפורטת עבור החלפת שפת הממשק.")
+            },
+            new[]
+            {
+                T(
+                    "Isolated diagnostic logging so logging failures cannot crash LayoutFixer.",
+                    "Диагностическое логирование изолировано, чтобы его ошибка не могла завершить LayoutFixer.",
+                    "רישום האבחון בודד כך שכשל ברישום לא יוכל להפיל את LayoutFixer.")
+            });
+
+        AddVersion(
             "v1.0.0",
             new[]
             {
