@@ -120,11 +120,21 @@ public sealed class TrayApplicationContext : ApplicationContext
 
         try
         {
+            int selectedLength =
+                lastWord && _settings.KeepSelectionAfterCorrection
+                    ? SelectionPreserver.CaptureSelectedLength()
+                    : 0;
+
             if (TextFixer.TryFix(
                 lastWord,
                 out KeyboardLanguage from,
                 out KeyboardLanguage to))
             {
+                // Only restore a selection that existed before correction.
+                // When the action fell back to the last word, selectedLength is 0.
+                if (selectedLength > 0)
+                    SelectionPreserver.RestorePreviousSelection(selectedLength);
+
                 // No balloon notification: the correction itself is the feedback.
             }
         }
