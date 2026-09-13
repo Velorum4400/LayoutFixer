@@ -42,8 +42,8 @@ public static class UiText
             "Исправлять выделенный текст или последнее слово",
             "תקן טקסט מסומן או את המילה האחרונה"),
         ["keep_selection"] = L(
-            "Keep corrected selected text selected",
-            "Оставлять исправленный выделенный текст выделенным",
+            "Keep corrected selected text selected after correction",
+            "Оставлять исправленный выделенный текст выделенным после исправления",
             "השאר את הטקסט המסומן מסומן לאחר התיקון"),
         ["hotkey_hint"] = L(
             "To change a hotkey, click the box with the current hotkey. A combination can contain a maximum of 3 keys.",
