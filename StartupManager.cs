@@ -7,7 +7,9 @@ public static class StartupManager
 {
     private const string RunKey =
         @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string AppName = "LayoutFixer";
+
+    private static string AppName =>
+        AppRuntime.IsPortable ? "LayoutFixerPortable" : "LayoutFixer";
 
     public static void SetEnabled(bool enabled)
     {
@@ -20,7 +22,8 @@ public static class StartupManager
         if (enabled)
         {
             string exe = Process.GetCurrentProcess().MainModule?.FileName ?? "";
-            key.SetValue(AppName, $"\"{exe}\"");
+            if (!string.IsNullOrWhiteSpace(exe))
+                key.SetValue(AppName, $"\"{exe}\"");
         }
         else
         {
