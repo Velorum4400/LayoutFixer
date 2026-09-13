@@ -6,10 +6,11 @@ namespace LayoutFixer;
 
 public sealed class AppSettings
 {
-    public int SettingsSchemaVersion { get; set; } = 22;
+    public int SettingsSchemaVersion { get; set; } = 23;
     public bool StartWithWindows { get; set; } = true;
     public bool FullTextEnabled { get; set; } = true;
     public bool LastWordEnabled { get; set; } = true;
+    public bool KeepSelectionAfterCorrection { get; set; } = false;
 
     // UI language: en, ru, he. English is the default.
     public string Language { get; set; } = "en";
@@ -50,7 +51,7 @@ public sealed class AppSettings
             if (settings.Language is not ("en" or "ru" or "he"))
                 settings.Language = "en";
 
-            settings.SettingsSchemaVersion = 22;
+            settings.SettingsSchemaVersion = 23;
             settings.Save();
 
             return settings;
@@ -68,10 +69,11 @@ public sealed class AppSettings
         StartWithWindows = defaults.StartWithWindows;
         FullTextEnabled = defaults.FullTextEnabled;
         LastWordEnabled = defaults.LastWordEnabled;
+        KeepSelectionAfterCorrection = defaults.KeepSelectionAfterCorrection;
         Language = defaults.Language;
         FullTextHotkey = defaults.FullTextHotkey;
         LastWordHotkey = defaults.LastWordHotkey;
-        SettingsSchemaVersion = 22;
+        SettingsSchemaVersion = 23;
     }
 
     public void Save()
