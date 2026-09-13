@@ -13,10 +13,10 @@
     <AssemblyTitle>Layout Fixer</AssemblyTitle>
     <Description>Keyboard layout text correction utility</Description>
 
-    <Version>1.2.2</Version>
-    <AssemblyVersion>1.2.2.0</AssemblyVersion>
-    <FileVersion>1.2.2.0</FileVersion>
-    <InformationalVersion>1.2.2</InformationalVersion>
+    <Version>1.2.3</Version>
+    <AssemblyVersion>1.2.3.0</AssemblyVersion>
+    <FileVersion>1.2.3.0</FileVersion>
+    <InformationalVersion>1.2.3</InformationalVersion>
     <ApplicationIcon>Assets\LayoutFixer.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
