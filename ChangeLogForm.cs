@@ -42,6 +42,22 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.3.0", Array.Empty<string>(), new[]
+        {
+            T(
+                "Fixed Hebrew RTL alignment in General settings and Scanner configuration so text stays visually aligned to the right without mirroring control geometry.",
+                "Исправлено RTL-выравнивание иврита на страницах Общих настроек и Конфигурации сканера: текст снова расположен справа без зеркального смещения самих элементов.",
+                "תוקן יישור RTL בעברית בדפי ההגדרות הכלליות והגדרת הסורק כך שהטקסט נשאר מיושר לימין בלי להזיז את מבנה הפקדים."),
+            T(
+                "Corrected WinForms label alignment behavior for Hebrew by accounting for RightToLeft mirroring.",
+                "Исправлено поведение WinForms Label для иврита с учётом зеркального применения TextAlign при RightToLeft.",
+                "תוקנה התנהגות היישור של תוויות WinForms בעברית תוך התחשבות בהיפוך של TextAlign במצב RightToLeft."),
+            T(
+                "Kept the larger caption heights introduced earlier so Russian and Hebrew headings are not clipped vertically.",
+                "Сохранены увеличенные высоты подписей, чтобы русские и ивритские заголовки не обрезались снизу.",
+                "נשמרו גבהי הכותרות המוגדלים כדי למנוע חיתוך אנכי של טקסט ברוסית ובעברית.")
+        });
+
         AddVersion("v1.2.2", Array.Empty<string>(), new[]
         {
             T(
