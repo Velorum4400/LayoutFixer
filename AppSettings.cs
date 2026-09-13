@@ -19,11 +19,7 @@ public sealed class AppSettings
     public string FullTextHotkey { get; set; } = "Ctrl+Shift";
     public string LastWordHotkey { get; set; } = "Insert";
 
-    private static string SettingsPath =>
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "LayoutFixer",
-            "settings.json");
+    private static string SettingsPath => AppRuntime.GetDataPath("settings.json");
 
     public static AppSettings CreateDefault() => new();
 
