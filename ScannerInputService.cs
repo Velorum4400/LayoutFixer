@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace LayoutFixer;
@@ -37,6 +38,7 @@ public sealed class ScannerInputService : IDisposable
     private const int WM_KEYUP = 0x0101;
     private const int WM_SYSKEYDOWN = 0x0104;
     private const int WM_SYSKEYUP = 0x0105;
+    private const int TerminatorDrainDelayMs = 70;
 
     private readonly RawInputWindow _window;
     private readonly Dictionary<IntPtr, ScannerDeviceInfo> _deviceCache = new();
@@ -137,6 +139,15 @@ public sealed class ScannerInputService : IDisposable
 
         ScannerDiagnosticLog.Write(
             $"Runtime terminator correlated in low-level hook. key={key}, ageMs={ageMs:F1}, text='{Sample(text)}', typedLength={typedLength}");
+
+        // Raw Input is received before some applications have finished processing
+        // the corresponding legacy HID keyboard messages. If we replace the text
+        // immediately, those queued messages can append the original barcode after
+        // the corrected one. The terminator itself is already being suppressed by
+        // ScannerTerminatorHook, so give the preceding characters a short moment to
+        // drain into the foreground control before selecting/replacing them.
+        Thread.Sleep(TerminatorDrainDelayMs);
+        ScannerDiagnosticLog.Write($"Scanner HID drain delay completed: {TerminatorDrainDelayMs} ms");
 
         _window.Post(() => ScannerTextInjector.ReplacePreviousText(text, typedLength, key));
         return true;
