@@ -119,8 +119,6 @@ public sealed class SettingsShellForm : Form
         _brand.ForeColor = Color.White;
         _brand.BackColor = Color.Transparent;
         _brand.TextAlign = ContentAlignment.MiddleLeft;
-        _brand.AutoEllipsis = false;
-        _brand.UseCompatibleTextRendering = false;
 
         _brandSub.SetBounds(105, 66, 210, 26);
         _brandSub.Text = $"v{AppInfo.Version}";
@@ -131,18 +129,16 @@ public sealed class SettingsShellForm : Form
         ConfigureNavButton(_navGeneral, 178, (_, _) => ShowPage(1));
         ConfigureNavButton(_navScanner, 234, (_, _) => ShowPage(2));
 
-        _sidebar.Controls.AddRange(new Control[]
-        {
-            _logo, _brand, _brandSub, _navCorrection, _navGeneral, _navScanner
-        });
+        _sidebar.Controls.AddRange(new Control[] { _logo, _brand, _brandSub, _navCorrection, _navGeneral, _navScanner });
 
         _header.Dock = DockStyle.Top;
         _header.Height = 94;
         _header.BackColor = Color.White;
 
-        _pageTitle.SetBounds(34, 27, 760, 46);
+        _pageTitle.SetBounds(34, 20, 760, 58);
         _pageTitle.Font = new Font("Segoe UI", 21F, FontStyle.Bold);
         _pageTitle.ForeColor = Color.FromArgb(24, 42, 72);
+        _pageTitle.TextAlign = ContentAlignment.MiddleLeft;
         _header.Controls.Add(_pageTitle);
 
         _footer.Dock = DockStyle.Bottom;
@@ -202,7 +198,7 @@ public sealed class SettingsShellForm : Form
 
         _full.SetBounds(34, 48, 24, 30);
         _full.Checked = _settings.FullTextEnabled;
-        _fullLabel.SetBounds(72, 45, 560, 36);
+        _fullLabel.SetBounds(72, 41, 560, 44);
         StyleMainLabel(_fullLabel);
         _fullHotkey.SetBounds(650, 40, 180, 42);
         _fullHotkey.Primary = false;
@@ -211,7 +207,7 @@ public sealed class SettingsShellForm : Form
 
         _word.SetBounds(34, 116, 24, 30);
         _word.Checked = _settings.LastWordEnabled;
-        _wordLabel.SetBounds(72, 108, 560, 48);
+        _wordLabel.SetBounds(72, 104, 560, 56);
         StyleMainLabel(_wordLabel);
         _wordHotkey.SetBounds(650, 108, 180, 42);
         _wordHotkey.Primary = false;
@@ -220,19 +216,15 @@ public sealed class SettingsShellForm : Form
 
         _keepSelection.SetBounds(34, 190, 24, 30);
         _keepSelection.Checked = _settings.KeepSelectionAfterCorrection;
-        _keepLabel.SetBounds(72, 181, 650, 58);
+        _keepLabel.SetBounds(72, 176, 650, 66);
         StyleMainLabel(_keepLabel);
 
-        _hotkeyHint.SetBounds(34, 276, 800, 76);
+        _hotkeyHint.SetBounds(34, 276, 800, 82);
         _hotkeyHint.ForeColor = Color.FromArgb(93, 108, 130);
         _hotkeyHint.Font = new Font("Segoe UI", 10F);
+        _hotkeyHint.TextAlign = ContentAlignment.TopLeft;
 
-        card.Controls.AddRange(new Control[]
-        {
-            _full, _fullLabel, _fullHotkey,
-            _word, _wordLabel, _wordHotkey,
-            _keepSelection, _keepLabel, _hotkeyHint
-        });
+        card.Controls.AddRange(new Control[] { _full, _fullLabel, _fullHotkey, _word, _wordLabel, _wordHotkey, _keepSelection, _keepLabel, _hotkeyHint });
         _correctionPage.Controls.Add(card);
     }
 
@@ -241,58 +233,43 @@ public sealed class SettingsShellForm : Form
         CardPanel card = MakeCard();
         card.Dock = DockStyle.Fill;
 
-        _languageLabel.SetBounds(34, 34, 320, 28);
+        _languageLabel.SetBounds(34, 27, 320, 38);
         StyleCaption(_languageLabel);
         _language.SetBounds(34, 68, 330, 36);
         _language.DropDownStyle = ComboBoxStyle.DropDownList;
-        _language.Items.AddRange(new object[]
-        {
-            new LanguageItem("en"), new LanguageItem("ru"), new LanguageItem("he")
-        });
+        _language.Items.AddRange(new object[] { new LanguageItem("en"), new LanguageItem("ru"), new LanguageItem("he") });
         SelectLanguage(_settings.Language);
         _language.SelectedIndexChanged += (_, _) =>
         {
             if (_updatingLanguage || _language.SelectedItem is not LanguageItem item)
                 return;
-
             UiText.Language = item.Code;
             ApplyLanguage();
         };
 
-        _startup.SetBounds(34, 132, 520, 34);
+        _startup.SetBounds(34, 127, 520, 42);
         _startup.Checked = _settings.StartWithWindows;
 
-        _layoutsTitle.SetBounds(34, 208, 420, 28);
+        _layoutsTitle.SetBounds(34, 198, 420, 40);
         StyleCaption(_layoutsTitle);
-        _layoutsValue.SetBounds(34, 240, 740, 32);
+        _layoutsValue.SetBounds(34, 238, 740, 40);
         _layoutsValue.Font = new Font("Segoe UI", 10.5F, FontStyle.Bold);
         _layoutsValue.ForeColor = Color.FromArgb(20, 112, 235);
+        _layoutsValue.TextAlign = ContentAlignment.MiddleLeft;
 
-        _generalInfo.SetBounds(34, 302, 760, 92);
+        _generalInfo.SetBounds(34, 300, 760, 98);
         _generalInfo.ForeColor = Color.FromArgb(93, 108, 130);
+        _generalInfo.TextAlign = ContentAlignment.TopLeft;
 
         _changeLog.SetBounds(34, 432, 180, 42);
         _changeLog.Primary = false;
-        _changeLog.Click += (_, _) =>
-        {
-            using var form = new ChangeLogForm(UiText.Language);
-            form.ShowDialog(this);
-        };
+        _changeLog.Click += (_, _) => { using var form = new ChangeLogForm(UiText.Language); form.ShowDialog(this); };
 
         _clearLog.SetBounds(228, 432, 180, 42);
         _clearLog.Primary = false;
-        _clearLog.Click += (_, _) =>
-        {
-            using var form = new ClearLogForm();
-            form.ShowDialog(this);
-        };
+        _clearLog.Click += (_, _) => { using var form = new ClearLogForm(); form.ShowDialog(this); };
 
-        card.Controls.AddRange(new Control[]
-        {
-            _languageLabel, _language, _startup,
-            _layoutsTitle, _layoutsValue, _generalInfo,
-            _changeLog, _clearLog
-        });
+        card.Controls.AddRange(new Control[] { _languageLabel, _language, _startup, _layoutsTitle, _layoutsValue, _generalInfo, _changeLog, _clearLog });
         _generalPage.Controls.Add(card);
     }
 
@@ -301,11 +278,12 @@ public sealed class SettingsShellForm : Form
         CardPanel card = MakeCard();
         card.Dock = DockStyle.Fill;
 
-        _scannerEnabled.SetBounds(34, 30, 560, 34);
+        _scannerEnabled.SetBounds(34, 27, 560, 42);
         _scannerEnabled.Checked = _settings.ScannerEnabled;
 
-        _scannerIntro.SetBounds(34, 82, 780, 58);
+        _scannerIntro.SetBounds(34, 78, 780, 62);
         _scannerIntro.ForeColor = Color.FromArgb(65, 82, 108);
+        _scannerIntro.TextAlign = ContentAlignment.TopLeft;
 
         _scanBox.SetBounds(34, 158, 610, 38);
         _scanBox.ReadOnly = true;
@@ -318,61 +296,52 @@ public sealed class SettingsShellForm : Form
         _detectScanner.Primary = true;
         _detectScanner.Click += (_, _) => BeginScannerDetection();
 
-        _deviceTitle.SetBounds(34, 228, 760, 27);
+        _deviceTitle.SetBounds(34, 218, 760, 40);
         StyleCaption(_deviceTitle);
-        _deviceValue.SetBounds(34, 260, 800, 82);
+        _deviceValue.SetBounds(34, 258, 800, 88);
         _deviceValue.Font = new Font("Segoe UI", 10.5F, FontStyle.Bold);
         _deviceValue.ForeColor = Color.FromArgb(30, 65, 105);
+        _deviceValue.TextAlign = ContentAlignment.TopLeft;
 
-        _barcodeTitle.SetBounds(34, 362, 760, 27);
+        _barcodeTitle.SetBounds(34, 352, 760, 40);
         StyleCaption(_barcodeTitle);
-        _barcodeValue.SetBounds(34, 394, 800, 36);
+        _barcodeValue.SetBounds(34, 392, 800, 40);
         _barcodeValue.Font = new Font("Consolas", 10.5F);
         _barcodeValue.ForeColor = Color.FromArgb(20, 112, 235);
+        _barcodeValue.TextAlign = ContentAlignment.MiddleLeft;
 
-        _scannerInfo.SetBounds(34, 456, 800, 86);
+        _scannerInfo.SetBounds(34, 452, 800, 90);
         _scannerInfo.ForeColor = Color.FromArgb(65, 82, 108);
-        _scannerNote.SetBounds(34, 556, 800, 58);
+        _scannerInfo.TextAlign = ContentAlignment.TopLeft;
+        _scannerNote.SetBounds(34, 552, 800, 64);
         _scannerNote.ForeColor = Color.FromArgb(126, 86, 18);
+        _scannerNote.TextAlign = ContentAlignment.TopLeft;
 
-        card.Controls.AddRange(new Control[]
-        {
-            _scannerEnabled, _scannerIntro, _scanBox, _detectScanner,
-            _deviceTitle, _deviceValue, _barcodeTitle, _barcodeValue,
-            _scannerInfo, _scannerNote
-        });
+        card.Controls.AddRange(new Control[] { _scannerEnabled, _scannerIntro, _scanBox, _detectScanner, _deviceTitle, _deviceValue, _barcodeTitle, _barcodeValue, _scannerInfo, _scannerNote });
         _scannerPage.Controls.Add(card);
     }
 
-    private static CardPanel MakeCard() => new()
-    {
-        BackColor = Color.White,
-        Padding = new Padding(22),
-        CornerRadius = 18
-    };
+    private static CardPanel MakeCard() => new() { BackColor = Color.White, Padding = new Padding(22), CornerRadius = 18 };
 
     private static void StyleMainLabel(Label label)
     {
         label.Font = new Font("Segoe UI", 11F);
         label.ForeColor = Color.FromArgb(28, 45, 72);
+        label.TextAlign = ContentAlignment.MiddleLeft;
     }
 
     private static void StyleCaption(Label label)
     {
         label.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
         label.ForeColor = Color.FromArgb(62, 78, 103);
+        label.TextAlign = ContentAlignment.MiddleLeft;
     }
 
     private void ShowPage(int index)
     {
         _activePage = index;
         _host.Controls.Clear();
-        Panel page = index switch
-        {
-            1 => _generalPage,
-            2 => _scannerPage,
-            _ => _correctionPage
-        };
+        Panel page = index switch { 1 => _generalPage, 2 => _scannerPage, _ => _correctionPage };
         page.Dock = DockStyle.Fill;
         _host.Controls.Add(page);
 
@@ -413,6 +382,94 @@ public sealed class SettingsShellForm : Form
         _barcodeValue.Width = _deviceValue.Width;
         _scannerInfo.Width = _deviceValue.Width;
         _scannerNote.Width = _deviceValue.Width;
+
+        ApplyRtlGeometry();
+    }
+
+    private void ApplyRtlGeometry()
+    {
+        bool rtl = UiText.IsRtl;
+        int generalRight = Math.Max(34, _generalPage.ClientSize.Width - 34);
+        int scannerRight = Math.Max(34, _scannerPage.ClientSize.Width - 34);
+
+        // Keep page/card geometry LTR so WinForms does not mirror fixed coordinates.
+        _correctionPage.RightToLeft = RightToLeft.No;
+        _generalPage.RightToLeft = RightToLeft.No;
+        _scannerPage.RightToLeft = RightToLeft.No;
+
+        SetTextDirection(_fullLabel, rtl);
+        SetTextDirection(_wordLabel, rtl);
+        SetTextDirection(_keepLabel, rtl);
+        SetTextDirection(_hotkeyHint, rtl, topAligned: true);
+
+        SetTextDirection(_languageLabel, rtl);
+        SetTextDirection(_layoutsTitle, rtl);
+        SetTextDirection(_layoutsValue, rtl);
+        SetTextDirection(_generalInfo, rtl, topAligned: true);
+        SetTextDirection(_scannerIntro, rtl, topAligned: true);
+        SetTextDirection(_deviceTitle, rtl);
+        SetTextDirection(_deviceValue, rtl, topAligned: true);
+        SetTextDirection(_barcodeTitle, rtl);
+        SetTextDirection(_barcodeValue, rtl);
+        SetTextDirection(_scannerInfo, rtl, topAligned: true);
+        SetTextDirection(_scannerNote, rtl, topAligned: true);
+
+        _language.RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
+        _startup.RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
+        _scannerEnabled.RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
+        _scanBox.RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
+
+        if (rtl)
+        {
+            _languageLabel.Left = generalRight - _languageLabel.Width;
+            _language.Left = generalRight - _language.Width;
+            _startup.Left = generalRight - _startup.Width;
+            _layoutsTitle.Left = generalRight - _layoutsTitle.Width;
+            _layoutsValue.Left = generalRight - _layoutsValue.Width;
+            _generalInfo.Left = generalRight - _generalInfo.Width;
+
+            _scannerEnabled.Left = scannerRight - _scannerEnabled.Width;
+            _scannerIntro.Left = scannerRight - _scannerIntro.Width;
+            _detectScanner.Left = 34;
+            _scanBox.Left = _detectScanner.Right + 16;
+            _deviceTitle.Left = scannerRight - _deviceTitle.Width;
+            _deviceValue.Left = scannerRight - _deviceValue.Width;
+            _barcodeTitle.Left = scannerRight - _barcodeTitle.Width;
+            _barcodeValue.Left = scannerRight - _barcodeValue.Width;
+            _scannerInfo.Left = scannerRight - _scannerInfo.Width;
+            _scannerNote.Left = scannerRight - _scannerNote.Width;
+        }
+        else
+        {
+            _languageLabel.Left = 34;
+            _language.Left = 34;
+            _startup.Left = 34;
+            _layoutsTitle.Left = 34;
+            _layoutsValue.Left = 34;
+            _generalInfo.Left = 34;
+
+            _scannerEnabled.Left = 34;
+            _scannerIntro.Left = 34;
+            _scanBox.Left = 34;
+            _detectScanner.Left = _scanBox.Right + 16;
+            _deviceTitle.Left = 34;
+            _deviceValue.Left = 34;
+            _barcodeTitle.Left = 34;
+            _barcodeValue.Left = 34;
+            _scannerInfo.Left = 34;
+            _scannerNote.Left = 34;
+        }
+
+        _pageTitle.RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
+        _pageTitle.TextAlign = rtl ? ContentAlignment.MiddleRight : ContentAlignment.MiddleLeft;
+    }
+
+    private static void SetTextDirection(Label label, bool rtl, bool topAligned = false)
+    {
+        label.RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
+        label.TextAlign = rtl
+            ? (topAligned ? ContentAlignment.TopRight : ContentAlignment.MiddleRight)
+            : (topAligned ? ContentAlignment.TopLeft : ContentAlignment.MiddleLeft);
     }
 
     private void BeginScannerDetection()
@@ -426,10 +483,8 @@ public sealed class SettingsShellForm : Form
 
     private void OnIdentificationProgress(string barcode)
     {
-        if (!_scanner.IdentificationActive)
-            return;
-
-        _scanBox.Text = string.IsNullOrEmpty(barcode) ? UiText.Get("scanner_waiting") : barcode;
+        if (_scanner.IdentificationActive)
+            _scanBox.Text = string.IsNullOrEmpty(barcode) ? UiText.Get("scanner_waiting") : barcode;
     }
 
     private void OnScannerIdentified(ScannerDeviceInfo device, string barcode)
@@ -440,31 +495,22 @@ public sealed class SettingsShellForm : Form
         _scannerDisplayName = device.DisplayName;
         _lastBarcode = barcode;
         _scannerEnabled.Checked = true;
-
         _scanBox.Text = barcode;
         _barcodeValue.Text = barcode;
         UpdateScannerDeviceText();
-        ScannerDiagnosticLog.Write(
-            $"Settings UI accepted scanner: {device.DisplayName}; barcode='{barcode}'");
+        ScannerDiagnosticLog.Write($"Settings UI accepted scanner: {device.DisplayName}; barcode='{barcode}'");
     }
 
     private void UpdateScannerDeviceText()
     {
-        if (string.IsNullOrWhiteSpace(_scannerDevicePath) &&
-            string.IsNullOrWhiteSpace(_scannerVendorId))
+        if (string.IsNullOrWhiteSpace(_scannerDevicePath) && string.IsNullOrWhiteSpace(_scannerVendorId))
         {
             _deviceValue.Text = UiText.Get("scanner_not_configured");
             return;
         }
 
-        string name = string.IsNullOrWhiteSpace(_scannerDisplayName)
-            ? "HID keyboard device"
-            : _scannerDisplayName;
-
-        string ids = string.IsNullOrWhiteSpace(_scannerVendorId)
-            ? ""
-            : $"\r\nVID_{_scannerVendorId} / PID_{_scannerProductId}";
-
+        string name = string.IsNullOrWhiteSpace(_scannerDisplayName) ? "HID keyboard device" : _scannerDisplayName;
+        string ids = string.IsNullOrWhiteSpace(_scannerVendorId) ? "" : $"\r\nVID_{_scannerVendorId} / PID_{_scannerProductId}";
         _deviceValue.Text = name + ids;
     }
 
@@ -484,7 +530,6 @@ public sealed class SettingsShellForm : Form
             MessageBox.Show(this, UiText.Get("invalid_hotkey"), AppInfo.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
-
         if (HotkeyDefinition.Parse(full).SetEquals(HotkeyDefinition.Parse(word)))
         {
             MessageBox.Show(this, UiText.Get("duplicate_hotkey"), AppInfo.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -498,7 +543,6 @@ public sealed class SettingsShellForm : Form
         _settings.LastWordHotkey = word;
         _settings.StartWithWindows = _startup.Checked;
         _settings.Language = (_language.SelectedItem as LanguageItem)?.Code ?? "en";
-
         _settings.ScannerEnabled = _scannerEnabled.Checked;
         _settings.ScannerDevicePath = _scannerDevicePath;
         _settings.ScannerVendorId = _scannerVendorId;
@@ -510,9 +554,7 @@ public sealed class SettingsShellForm : Form
         StartupManager.SetEnabled(_settings.StartWithWindows);
         _settings.Save();
         _scanner.ApplySettings(_settings);
-
-        ScannerDiagnosticLog.Write(
-            $"Settings saved. scannerEnabled={_settings.ScannerEnabled}, device='{_settings.ScannerDisplayName}', VID={_settings.ScannerVendorId}, PID={_settings.ScannerProductId}");
+        ScannerDiagnosticLog.Write($"Settings saved. scannerEnabled={_settings.ScannerEnabled}, device='{_settings.ScannerDisplayName}', VID={_settings.ScannerVendorId}, PID={_settings.ScannerProductId}");
 
         DialogResult = DialogResult.OK;
         Close();
@@ -520,13 +562,7 @@ public sealed class SettingsShellForm : Form
 
     private void RestoreDefaults()
     {
-        DialogResult answer = MessageBox.Show(
-            this,
-            UiText.Get("defaults_confirm"),
-            AppInfo.Name,
-            MessageBoxButtons.YesNo,
-            MessageBoxIcon.Question);
-
+        DialogResult answer = MessageBox.Show(this, UiText.Get("defaults_confirm"), AppInfo.Name, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
         if (answer != DialogResult.Yes)
             return;
 
@@ -587,29 +623,20 @@ public sealed class SettingsShellForm : Form
         _defaults.Text = UiText.Get("defaults");
         _save.Text = UiText.Get("save");
 
-        bool rtl = UiText.IsRtl;
-        foreach (Panel page in new[] { _correctionPage, _generalPage, _scannerPage })
-            page.RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
-
         _updatingLanguage = true;
         try
         {
             string selected = (_language.SelectedItem as LanguageItem)?.Code ?? UiText.Language;
             _language.BeginUpdate();
             _language.Items.Clear();
-            _language.Items.AddRange(new object[]
-            {
-                new LanguageItem("en"), new LanguageItem("ru"), new LanguageItem("he")
-            });
+            _language.Items.AddRange(new object[] { new LanguageItem("en"), new LanguageItem("ru"), new LanguageItem("he") });
             SelectLanguage(selected);
             _language.EndUpdate();
         }
-        finally
-        {
-            _updatingLanguage = false;
-        }
+        finally { _updatingLanguage = false; }
 
         UpdatePageTitle();
+        LayoutPages();
     }
 
     private void UpdatePageTitle()
@@ -632,7 +659,6 @@ public sealed class SettingsShellForm : Form
                 return;
             }
         }
-
         if (_language.Items.Count > 0)
             _language.SelectedIndex = 0;
     }
@@ -647,7 +673,6 @@ public sealed class SettingsShellForm : Form
             _logo.Image?.Dispose();
             Icon?.Dispose();
         }
-
         base.Dispose(disposing);
     }
 
@@ -655,7 +680,6 @@ public sealed class SettingsShellForm : Form
     {
         public string Code { get; }
         public LanguageItem(string code) => Code = code;
-
         public override string ToString() => Code switch
         {
             "ru" => UiText.Get("russian"),
