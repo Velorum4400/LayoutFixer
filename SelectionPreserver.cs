@@ -9,7 +9,7 @@ public static class SelectionPreserver
 {
     public sealed class SelectionSnapshot
     {
-        internal TextPatternRange? Range { get; init; }
+        public int StartOffset { get; init; }
         public int Length { get; init; }
 
         public bool HasSelection => Length > 0;
@@ -31,13 +31,25 @@ public static class SelectionPreserver
             if (ranges == null || ranges.Length == 0)
                 return new SelectionSnapshot();
 
-            string selected = ranges[0].GetText(-1);
+            TextPatternRange selectedRange = ranges[0];
+            string selected = selectedRange.GetText(-1);
             if (string.IsNullOrEmpty(selected))
                 return new SelectionSnapshot();
 
+            // Store the selection as a logical character offset from the start
+            // of the current document. UIA ranges can become stale after text is
+            // replaced, while offsets let us build a fresh valid range afterward.
+            TextPatternRange prefix = textPattern.DocumentRange.Clone();
+            prefix.MoveEndpointByRange(
+                TextPatternRangeEndpoint.End,
+                selectedRange,
+                TextPatternRangeEndpoint.Start);
+
+            string beforeSelection = prefix.GetText(-1);
+
             return new SelectionSnapshot
             {
-                Range = ranges[0].Clone(),
+                StartOffset = beforeSelection?.Length ?? 0,
                 Length = selected.Length
             };
         }
@@ -52,38 +64,21 @@ public static class SelectionPreserver
         if (!snapshot.HasSelection)
             return false;
 
-        // First try the exact range captured before correction. In controls where
-        // UI Automation keeps TextPatternRange positions stable across replacement,
-        // this restores the selection immediately with no polling delay.
-        if (snapshot.Range != null)
-        {
-            try
-            {
-                snapshot.Range.Select();
-                return true;
-            }
-            catch
-            {
-                // Some controls invalidate ranges after editing. Fall through to
-                // the caret-based method below.
-            }
-        }
-
-        // Fallback for controls that invalidate the old range. Most are ready on
-        // the first attempt; only retry briefly when their UIA state lags behind.
+        // Usually succeeds immediately. Retry only very briefly for controls
+        // whose UI Automation tree updates a few milliseconds after Ctrl+V.
         for (int attempt = 0; attempt < 4; attempt++)
         {
-            if (TryRestorePreviousSelection(snapshot.Length))
+            if (TryRestoreSelection(snapshot))
                 return true;
 
             if (attempt < 3)
-                Thread.Sleep(6);
+                Thread.Sleep(4);
         }
 
         return false;
     }
 
-    private static bool TryRestorePreviousSelection(int length)
+    private static bool TryRestoreSelection(SelectionSnapshot snapshot)
     {
         try
         {
@@ -95,25 +90,33 @@ public static class SelectionPreserver
             }
 
             var textPattern = (TextPattern)patternObj;
-            TextPatternRange[] ranges = textPattern.GetSelection();
-            if (ranges == null || ranges.Length == 0)
-                return false;
+            TextPatternRange range = textPattern.DocumentRange.Clone();
 
-            TextPatternRange caret = ranges[0].Clone();
-            caret.MoveEndpointByRange(
+            // Collapse a fresh range at the beginning of the document.
+            range.MoveEndpointByRange(
                 TextPatternRangeEndpoint.End,
-                caret,
+                range,
                 TextPatternRangeEndpoint.Start);
 
-            int moved = caret.MoveEndpointByUnit(
-                TextPatternRangeEndpoint.Start,
-                TextUnit.Character,
-                -length);
+            if (snapshot.StartOffset > 0)
+            {
+                int moved = range.Move(
+                    TextUnit.Character,
+                    snapshot.StartOffset);
 
-            if (moved == 0)
+                if (moved != snapshot.StartOffset)
+                    return false;
+            }
+
+            int extended = range.MoveEndpointByUnit(
+                TextPatternRangeEndpoint.End,
+                TextUnit.Character,
+                snapshot.Length);
+
+            if (extended != snapshot.Length)
                 return false;
 
-            caret.Select();
+            range.Select();
             return true;
         }
         catch
