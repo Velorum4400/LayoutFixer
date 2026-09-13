@@ -392,7 +392,7 @@ public sealed class SettingsShellForm : Form
         int generalRight = Math.Max(34, _generalPage.ClientSize.Width - 34);
         int scannerRight = Math.Max(34, _scannerPage.ClientSize.Width - 34);
 
-        // Keep page/card geometry LTR so WinForms does not mirror fixed coordinates.
+        // Keep page/card geometry LTR so fixed coordinates are not mirrored.
         _correctionPage.RightToLeft = RightToLeft.No;
         _generalPage.RightToLeft = RightToLeft.No;
         _scannerPage.RightToLeft = RightToLeft.No;
@@ -461,15 +461,21 @@ public sealed class SettingsShellForm : Form
         }
 
         _pageTitle.RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
-        _pageTitle.TextAlign = rtl ? ContentAlignment.MiddleRight : ContentAlignment.MiddleLeft;
+        // WinForms mirrors ContentAlignment when RightToLeft=Yes. MiddleLeft therefore renders
+        // on the visual right while preserving correct Hebrew bidi ordering.
+        _pageTitle.TextAlign = ContentAlignment.MiddleLeft;
     }
 
     private static void SetTextDirection(Label label, bool rtl, bool topAligned = false)
     {
         label.RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
-        label.TextAlign = rtl
-            ? (topAligned ? ContentAlignment.TopRight : ContentAlignment.MiddleRight)
-            : (topAligned ? ContentAlignment.TopLeft : ContentAlignment.MiddleLeft);
+
+        // WinForms mirrors alignment when RightToLeft=Yes. Using Left here gives the
+        // desired visual right alignment for Hebrew; using Right would push it left.
+        if (rtl)
+            label.TextAlign = topAligned ? ContentAlignment.TopLeft : ContentAlignment.MiddleLeft;
+        else
+            label.TextAlign = topAligned ? ContentAlignment.TopLeft : ContentAlignment.MiddleLeft;
     }
 
     private void BeginScannerDetection()
