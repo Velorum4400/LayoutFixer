@@ -7,7 +7,15 @@ namespace LayoutFixer;
 
 public static class SelectionPreserver
 {
-    public static int CaptureSelectedLength()
+    public sealed class SelectionSnapshot
+    {
+        internal TextPatternRange? Range { get; init; }
+        public int Length { get; init; }
+
+        public bool HasSelection => Length > 0;
+    }
+
+    public static SelectionSnapshot CaptureSelection()
     {
         try
         {
@@ -15,38 +23,61 @@ public static class SelectionPreserver
             if (element == null ||
                 !element.TryGetCurrentPattern(TextPattern.Pattern, out object? patternObj))
             {
-                return 0;
+                return new SelectionSnapshot();
             }
 
             var textPattern = (TextPattern)patternObj;
             TextPatternRange[] ranges = textPattern.GetSelection();
             if (ranges == null || ranges.Length == 0)
-                return 0;
+                return new SelectionSnapshot();
 
             string selected = ranges[0].GetText(-1);
-            return string.IsNullOrEmpty(selected) ? 0 : selected.Length;
+            if (string.IsNullOrEmpty(selected))
+                return new SelectionSnapshot();
+
+            return new SelectionSnapshot
+            {
+                Range = ranges[0].Clone(),
+                Length = selected.Length
+            };
         }
         catch
         {
-            return 0;
+            return new SelectionSnapshot();
         }
     }
 
-    public static bool RestorePreviousSelection(int length)
+    public static bool RestoreSelection(SelectionSnapshot snapshot)
     {
-        if (length <= 0)
+        if (!snapshot.HasSelection)
             return false;
 
-        // Most applications are ready immediately after the paste completes.
-        // A few expose the new caret through UI Automation a few milliseconds
-        // later, so retry briefly instead of forcing a large fixed delay for all apps.
-        for (int attempt = 0; attempt < 6; attempt++)
+        // First try the exact range captured before correction. In controls where
+        // UI Automation keeps TextPatternRange positions stable across replacement,
+        // this restores the selection immediately with no polling delay.
+        if (snapshot.Range != null)
         {
-            if (TryRestorePreviousSelection(length))
+            try
+            {
+                snapshot.Range.Select();
+                return true;
+            }
+            catch
+            {
+                // Some controls invalidate ranges after editing. Fall through to
+                // the caret-based method below.
+            }
+        }
+
+        // Fallback for controls that invalidate the old range. Most are ready on
+        // the first attempt; only retry briefly when their UIA state lags behind.
+        for (int attempt = 0; attempt < 4; attempt++)
+        {
+            if (TryRestorePreviousSelection(snapshot.Length))
                 return true;
 
-            if (attempt < 5)
-                Thread.Sleep(12);
+            if (attempt < 3)
+                Thread.Sleep(6);
         }
 
         return false;
