@@ -103,7 +103,7 @@ public sealed class SettingsShellForm : Form
     private void BuildShell()
     {
         _sidebar.Dock = DockStyle.Left;
-        _sidebar.Width = 320;
+        _sidebar.Width = 340;
         _sidebar.BackColor = Color.FromArgb(15, 38, 76);
 
         _logo.SetBounds(28, 24, 62, 62);
@@ -111,16 +111,18 @@ public sealed class SettingsShellForm : Form
         _logo.Image = AppAssets.GetLogo();
         _logo.BackColor = Color.Transparent;
 
-        _brand.SetBounds(104, 16, 200, 52);
+        _brand.AutoSize = true;
+        _brand.Location = new Point(104, 18);
+        _brand.MaximumSize = new Size(220, 0);
         _brand.Text = "LayoutFixer";
         _brand.Font = new Font("Segoe UI", 15F, FontStyle.Bold);
         _brand.ForeColor = Color.White;
         _brand.BackColor = Color.Transparent;
         _brand.TextAlign = ContentAlignment.MiddleLeft;
         _brand.AutoEllipsis = false;
-        _brand.UseCompatibleTextRendering = true;
+        _brand.UseCompatibleTextRendering = false;
 
-        _brandSub.SetBounds(105, 66, 195, 26);
+        _brandSub.SetBounds(105, 66, 210, 26);
         _brandSub.Text = $"v{AppInfo.Version}";
         _brandSub.ForeColor = Color.FromArgb(175, 199, 230);
         _brandSub.BackColor = Color.Transparent;
@@ -181,7 +183,7 @@ public sealed class SettingsShellForm : Form
 
     private void ConfigureNavButton(Button button, int top, EventHandler click)
     {
-        button.SetBounds(18, top, 284, 46);
+        button.SetBounds(18, top, 304, 46);
         button.FlatStyle = FlatStyle.Flat;
         button.FlatAppearance.BorderSize = 0;
         button.Font = new Font("Segoe UI", 10.5F, FontStyle.Bold);
