@@ -42,194 +42,163 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
-        AddVersion("v1.1.0", new[]
+        AddVersion("v1.2.1", Array.Empty<string>(), new[]
         {
             T(
-                "Added a Windows installer built with Inno Setup.",
-                "Добавлен установщик Windows на базе Inno Setup.",
-                "נוסף מתקין Windows המבוסס על Inno Setup."),
+                "Restored text-correction hotkeys by fully separating the scanner subsystem from the low-level keyboard hook.",
+                "Восстановлена работа хоткеев исправления текста: подсистема сканера полностью отделена от low-level keyboard hook.",
+                "שוחזרה פעולת מקשי הקיצור לתיקון טקסט על ידי הפרדה מלאה של מערכת הסורק מ-hook המקלדת."),
             T(
-                "build.cmd now publishes LayoutFixer and creates a versioned Setup EXE automatically.",
-                "build.cmd теперь публикует LayoutFixer и автоматически создаёт установщик Setup EXE с номером версии.",
-                "build.cmd מפרסם כעת את LayoutFixer ויוצר אוטומטית מתקין Setup EXE עם מספר הגרסה."),
+                "Expanded the Selected device and USB HID information areas in Scanner Configuration so text is no longer clipped.",
+                "Увеличены блоки Selected device и информации про USB HID в конфигурации сканера, чтобы текст больше не обрезался.",
+                "הוגדלו אזורי המכשיר הנבחר והמידע על USB HID כדי למנוע חיתוך טקסט."),
             T(
-                "The installer adds LayoutFixer to Installed apps and the Start menu, with an optional desktop shortcut and launch after setup.",
-                "Установщик добавляет LayoutFixer в список установленных приложений и меню «Пуск», с дополнительным ярлыком на рабочем столе и запуском после установки.",
-                "המתקין מוסיף את LayoutFixer לרשימת היישומים המותקנים ולתפריט התחל, עם קיצור דרך אופציונלי בשולחן העבודה והפעלה לאחר ההתקנה.")
+                "Added scanner_diagnostic.log with scanner detection, Raw Input, barcode buffering and SendInput diagnostics.",
+                "Добавлен scanner_diagnostic.log с диагностикой определения сканера, Raw Input, буфера штрихкода и SendInput.",
+                "נוסף scanner_diagnostic.log עם אבחון זיהוי סורק, Raw Input, מאגר ברקוד ו-SendInput.")
+        });
+
+        AddVersion("v1.2.0", new[]
+        {
+            T(
+                "Added universal USB HID barcode-scanner support with Scan to identify device binding.",
+                "Добавлена универсальная поддержка USB HID баркод-сканеров с привязкой устройства через сканирование тестового штрихкода.",
+                "נוספה תמיכה אוניברסלית בסורקי ברקוד USB HID עם זיהוי המכשיר באמצעות סריקת ברקוד."),
+            T(
+                "Scanner input is interpreted as US English independently of the currently active Windows keyboard layout.",
+                "Ввод выбранного сканера интерпретируется как US English независимо от текущей раскладки Windows.",
+                "קלט מהסורק הנבחר מפוענח כאנגלית US ללא תלות בפריסת Windows הפעילה."),
+            T(
+                "Redesigned Settings with a left navigation menu: Text correction, General settings and Scanner configuration.",
+                "Переработано окно настроек: слева добавлено меню Исправление текста, Общие настройки и Конфигурация сканера.",
+                "חלון ההגדרות עוצב מחדש עם תפריט צד לתיקון טקסט, הגדרות כלליות והגדרת סורק.")
+        }, Array.Empty<string>());
+
+        AddVersion("v1.1.0", new[]
+        {
+            T("Added a Windows installer built with Inno Setup.", "Добавлен установщик Windows на базе Inno Setup.", "נוסף מתקין Windows המבוסס על Inno Setup."),
+            T("build.cmd now creates a versioned Setup EXE automatically.", "build.cmd теперь автоматически создаёт Setup EXE с номером версии.", "build.cmd יוצר כעת אוטומטית Setup EXE עם מספר גרסה."),
+            T("Added a separate portable ZIP build with isolated portable settings.", "Добавлена отдельная portable ZIP-сборка с независимыми portable-настройками.", "נוספה בניית ZIP ניידת עם הגדרות נפרדות.")
         }, Array.Empty<string>());
 
         AddVersion("v1.0.13", Array.Empty<string>(), new[]
         {
-            T(
-                "Fixed the regression where correcting a word could only select it without replacing it.",
-                "Исправлена ошибка, из-за которой исправление слова могло только выделять его без замены текста.",
-                "תוקנה תקלה שבה תיקון מילה היה עלול רק לסמן אותה בלי להחליף את הטקסט."),
-            T(
-                "Paste completion is now confirmed from the text before the caret, including automatically selected last words.",
-                "Подтверждение вставки теперь проверяет текст перед курсором, в том числе для автоматически выделенного последнего слова.",
-                "אישור ההדבקה בודק כעת את הטקסט שלפני הסמן, כולל מילה אחרונה שסומנה אוטומטית."),
-            T(
-                "Clipboard restoration is synchronous again and cannot race the target application's Ctrl+V handling.",
-                "Восстановление буфера обмена снова выполняется синхронно и больше не должно опережать обработку Ctrl+V приложением.",
-                "שחזור הלוח מתבצע שוב באופן סינכרוני ואינו אמור להקדים את עיבוד Ctrl+V של היישום.")
+            T("Fixed the regression where correcting a word could only select it without replacing it.", "Исправлена ошибка, из-за которой исправление слова могло только выделять его без замены.", "תוקנה תקלה שבה תיקון מילה היה עלול רק לסמן אותה בלי להחליף אותה."),
+            T("Clipboard restoration is synchronous again and no longer races Ctrl+V handling.", "Восстановление буфера обмена снова синхронное и не опережает обработку Ctrl+V.", "שחזור הלוח שוב סינכרוני ואינו מקדים את Ctrl+V.")
         });
 
         AddVersion("v1.0.12", Array.Empty<string>(), new[]
         {
-            T(
-                "Changed clipboard restoration to avoid inserting the user's previous clipboard contents instead of corrected text.",
-                "Изменён порядок восстановления буфера обмена, чтобы вместо исправленного текста не вставлялось старое содержимое буфера.",
-                "שונה סדר שחזור הלוח כדי למנוע הדבקת התוכן הישן במקום הטקסט המתוקן."),
-            T(
-                "Moved selection restoration into the correction process.",
-                "Возврат выделения перенесён внутрь процесса исправления.",
-                "שחזור הסימון הועבר לתוך תהליך התיקון.")
+            T("Changed clipboard restoration to avoid pasting previous clipboard contents.", "Изменён порядок восстановления буфера, чтобы не вставлялось его старое содержимое.", "שונה סדר שחזור הלוח כדי למנוע הדבקת תוכן ישן."),
+            T("Moved selection restoration into the correction process.", "Возврат выделения перенесён внутрь процесса исправления.", "שחזור הסימון הועבר לתהליך התיקון.")
         });
 
         AddVersion("v1.0.11", Array.Empty<string>(), new[]
         {
-            T(
-                "Selection restoration now rebuilds a fresh UI Automation range from the saved position and length.",
-                "Возврат выделения теперь создаёт новый диапазон UI Automation по сохранённой позиции и длине.",
-                "שחזור הסימון יוצר כעת טווח UI Automation חדש לפי המיקום והאורך שנשמרו."),
-            T(
-                "Added more vertical space for the keep-selection setting text.",
-                "Добавлено дополнительное место по высоте для текста настройки сохранения выделения.",
-                "נוסף מקום אנכי לטקסט אפשרות שמירת הסימון.")
+            T("Selection restoration now rebuilds a fresh UI Automation range from saved position and length.", "Возврат выделения теперь создаёт новый UI Automation диапазон по сохранённой позиции и длине.", "שחזור הסימון בונה טווח UI Automation חדש לפי מיקום ואורך שמורים."),
+            T("Added more vertical space for the keep-selection option.", "Добавлено больше места для настройки сохранения выделения.", "נוסף מקום אנכי לאפשרות שמירת הסימון.")
         });
 
         AddVersion("v1.0.10", Array.Empty<string>(), new[]
         {
-            T(
-                "Expanded the keep-selection setting text with 'after correction' and enabled multiline wrapping.",
-                "К настройке сохранения выделения добавлено «после исправления» и включён перенос на следующую строку.",
-                "נוסף ניסוח לאחר התיקון לאפשרות שמירת הסימון ונוספה גלישת שורות."),
-            T(
-                "Reduced the retry delays used when restoring a corrected selection.",
-                "Уменьшены задержки повторных попыток при возврате выделения после исправления.",
-                "קוצרו זמני ההמתנה בניסיונות שחזור הסימון לאחר תיקון.")
+            T("Improved keep-selection wording and wrapping.", "Улучшены текст и перенос строк настройки сохранения выделения.", "שופר ניסוח וגלישת השורות של שמירת הסימון."),
+            T("Reduced selection-restoration retry delays.", "Уменьшены задержки возврата выделения.", "קוצרו עיכובי שחזור הסימון.")
         });
 
-        AddVersion("v1.0.9", Array.Empty<string>(), new[]
+        AddVersion("v1.0.9", new[]
         {
-            T("Made round-trips through Hebrew preserve ambiguous punctuation exactly.", "Исправлена потеря пунктуации при циклическом преобразовании текста через иврит.", "תוקנה שמירת סימני הפיסוק במעברים מחזוריים דרך עברית."),
-            T("Updated the keep-selection option text and enabled wrapping for long selectable labels.", "Уточнён текст настройки сохранения выделения и добавлен перенос длинных подписей.", "עודכן טקסט אפשרות שמירת הסימון ונוספה גלישת שורות לכיתובים ארוכים."),
-            T("Optimized layout conversion with precomputed character indexes.", "Оптимизировано преобразование раскладок с помощью заранее построенных индексов символов.", "שופר ביצוע המרת הפריסות באמצעות אינדקסי תווים מוכנים מראש.")
-        });
+            T("Preserved ambiguous punctuation across Hebrew round-trips.", "Сохранена точная пунктуация при циклических преобразованиях через иврит.", "נשמרו סימני פיסוק דו-משמעיים במעברים דרך עברית."),
+            T("Optimized layout conversion with precomputed character indexes.", "Оптимизировано преобразование раскладок заранее построенными индексами символов.", "שופרה המרת פריסות באמצעות אינדקסי תווים מוכנים מראש.")
+        }, Array.Empty<string>());
 
         AddVersion("v1.0.8", new[]
         {
-            T("Added an option to keep corrected selected text selected after correction.", "Добавлена настройка, позволяющая оставлять исправленный выделенный текст выделенным после исправления.", "נוספה אפשרות להשאיר את הטקסט המתוקן מסומן לאחר התיקון.")
-        }, new[]
-        {
-            T("Further increased the Settings window width and refined Hebrew text alignment.", "Дополнительно увеличена ширина окна настроек и уточнено выравнивание текста на иврите.", "הוגדל שוב רוחב חלון ההגדרות ושופר יישור הטקסט בעברית.")
-        });
+            T("Added an option to keep corrected selected text selected after correction.", "Добавлена настройка сохранения выделения после исправления.", "נוספה אפשרות להשאיר טקסט מתוקן מסומן.")
+        }, Array.Empty<string>());
 
         AddVersion("v1.0.7", Array.Empty<string>(), new[]
         {
-            T("Increased the minimum Settings width and corrected Hebrew right-to-left alignment.", "Увеличена минимальная ширина окна настроек и исправлено выравнивание Hebrew-интерфейса справа налево.", "הוגדל הרוחב המינימלי של ההגדרות ותוקן יישור הממשק העברי מימין לשמאל.")
+            T("Increased Settings width and refined Hebrew RTL alignment.", "Увеличена ширина настроек и улучшено RTL-выравнивание иврита.", "הוגדל רוחב ההגדרות ושופר יישור RTL בעברית.")
         });
 
         AddVersion("v1.0.6", new[]
         {
-            T("Added a Clear log button with confirmation and result states.", "Добавлена кнопка «Очистить лог» с подтверждением и сообщением о результате.", "נוסף כפתור לניקוי הלוג עם אישור והודעת תוצאה."),
-            T("Errors while clearing diagnostic.log are written to error.log.", "Ошибки при очистке diagnostic.log записываются в error.log.", "שגיאות בעת ניקוי diagnostic.log נרשמות אל error.log.")
-        }, new[]
-        {
-            T("Increased the minimum Settings window width.", "Увеличена минимальная ширина окна настроек.", "הוגדל הרוחב המינימלי של חלון ההגדרות."),
-            T("Made the Hebrew header identical to the English header and refined RTL text controls.", "Верхний блок Hebrew-интерфейса сделан идентичным английскому и уточнено RTL-отображение текста.", "הכותרת העליונה בעברית הותאמה לאנגלית ושופר כיוון הטקסט RTL.")
-        });
+            T("Added Clear log with confirmation and error logging.", "Добавлена очистка лога с подтверждением и записью ошибок.", "נוסף ניקוי לוג עם אישור ורישום שגיאות.")
+        }, Array.Empty<string>());
 
         AddVersion("v1.0.5", Array.Empty<string>(), new[]
         {
-            T("Increased the minimum Settings height to prevent information text from being clipped.", "Увеличена минимальная высота окна настроек, чтобы информационный текст не обрезался.", "הוגדל הגובה המינימלי של חלון ההגדרות כדי שטקסט המידע לא ייחתך."),
-            T("The tagline under LayoutFixer now always stays in English.", "Фраза под LayoutFixer теперь всегда остаётся на английском.", "שורת המשנה מתחת ל-LayoutFixer נשארת תמיד באנגלית."),
-            T("Adjusted the Hebrew settings layout and installed-languages label.", "Скорректирован интерфейс на иврите и подпись установленных языков.", "הותאם ממשק ההגדרות בעברית וכיתוב השפות המותקנות.")
+            T("Adjusted Settings height and Hebrew layout; tagline stays in English.", "Скорректированы высота настроек и Hebrew-интерфейс; tagline всегда остаётся английским.", "הותאמו גובה ההגדרות והממשק בעברית; שורת המשנה נשארת באנגלית.")
         });
 
         AddVersion("v1.0.4", Array.Empty<string>(), new[]
         {
-            T("Added missing changelog entries for versions 1.0.1 through 1.0.3.", "Добавлены отсутствующие записи списка изменений для версий 1.0.1–1.0.3.", "נוספו רשומות חסרות עבור גרסאות 1.0.1–1.0.3."),
-            T("Fixed clipping of the LayoutFixer title and increased the minimum Settings height.", "Исправлено обрезание заголовка LayoutFixer и увеличена минимальная высота окна настроек.", "תוקן חיתוך הכותרת LayoutFixer והוגדל הגובה המינימלי."),
-            T("Fixed card border painting artifacts while resizing.", "Исправлены артефакты отрисовки карточек при изменении размера окна.", "תוקנו ארטיפקטים בציור הכרטיסים בעת שינוי גודל החלון.")
+            T("Fixed title clipping, resize artifacts and missing changelog entries.", "Исправлены обрезание заголовка, артефакты изменения размера и пропуски в changelog.", "תוקנו חיתוך כותרת, ארטיפקטים בשינוי גודל וחוסרים ביומן השינויים.")
         });
 
         AddVersion("v1.0.3", new[]
         {
-            T("When converting to Hebrew, uppercase letter positions remain uppercase English letters.", "При преобразовании в иврит позиции заглавных букв остаются заглавными английскими буквами.", "בהמרה לעברית, מיקומי אותיות רישיות נשארים אותיות אנגליות רישיות.")
-        }, new[]
-        {
-            T("Corrected the Hebrew keyboard mapping and increased space for Settings labels.", "Исправлена таблица соответствий ивритской раскладки и увеличено место для подписей настроек.", "תוקנה מפת המקלדת העברית והוגדל המקום לכיתובי ההגדרות.")
-        });
+            T("Improved Hebrew keyboard mapping and uppercase physical-key behavior.", "Улучшена Hebrew-карта клавиатуры и обработка позиций заглавных клавиш.", "שופרה מפת המקלדת בעברית והתנהגות מקשים גדולים.")
+        }, Array.Empty<string>());
 
         AddVersion("v1.0.2", Array.Empty<string>(), new[]
         {
-            T("Fixed mixed RTL/LTR Hebrew conversion order returned by UI Automation.", "Исправлен порядок смешанного RTL/LTR-текста при преобразовании через иврит.", "תוקן סדר טקסט RTL/LTR מעורב בהמרה דרך עברית.")
+            T("Improved Hebrew mixed RTL/LTR recovery.", "Улучшено восстановление смешанного RTL/LTR текста на иврите.", "שופר שחזור טקסט עברי מעורב RTL/LTR.")
         });
 
-        AddVersion("v1.0.1", new[]
+        AddVersion("v1.0.1", Array.Empty<string>(), new[]
         {
-            T("Added global crash logging to %APPDATA%\\LayoutFixer\\crash.log.", "Добавлено глобальное логирование сбоев в %APPDATA%\\LayoutFixer\\crash.log.", "נוסף רישום קריסות אל %APPDATA%\\LayoutFixer\\crash.log."),
-            T("Added detailed diagnostics for interface language switching.", "Добавлена подробная диагностика переключения языка интерфейса.", "נוספה אבחנה מפורטת להחלפת שפת הממשק.")
-        }, Array.Empty<string>());
+            T("Added crash logging and language-change diagnostics.", "Добавлены crash log и диагностика смены языка.", "נוספו רישום קריסות ואבחון שינוי שפה.")
+        });
 
         AddVersion("v1.0.0", new[]
         {
-            T("Added the new LayoutFixer application icon.", "Добавлен новый логотип LayoutFixer.", "נוסף סמל חדש של LayoutFixer."),
-            T("Redesigned the Settings window with a modern header, cards and action buttons.", "Обновлён интерфейс настроек: новый заголовок, карточки и кнопки действий.", "ממשק ההגדרות עוצב מחדש עם כותרת, כרטיסים וכפתורי פעולה.")
-        }, new[]
-        {
-            T("Preserved the existing hotkey, clipboard, localization and layout behavior.", "Сохранена существующая логика хоткеев, буфера обмена, языков и раскладок.", "נשמרה ההתנהגות הקיימת של מקשי הקיצור, הלוח, השפות והפריסות.")
-        });
+            T("Introduced the modern branded LayoutFixer Settings interface.", "Добавлен современный фирменный интерфейс настроек LayoutFixer.", "נוסף ממשק הגדרות מודרני וממותג של LayoutFixer.")
+        }, Array.Empty<string>());
 
         AddVersion("v0.22", new[]
         {
-            T("Added interface language selection: English, Russian and Hebrew.", "Добавлена смена языка интерфейса: английский, русский и иврит.", "נוספה בחירת שפת ממשק: אנגלית, רוסית ועברית."),
-            T("Added a Restore defaults button.", "Добавлена кнопка возврата к настройкам по умолчанию.", "נוסף כפתור לשחזור ברירות מחדל.")
+            T("Added English, Russian and Hebrew UI localization and Restore defaults.", "Добавлена локализация интерфейса на English, Русский и עברית, а также сброс настроек.", "נוספו שפות ממשק אנגלית, רוסית ועברית ושחזור ברירות מחדל.")
         }, Array.Empty<string>());
 
         AddVersion("v0.21", Array.Empty<string>(), new[]
         {
-            T("Removed visible borders and caret from selectable Settings text.", "Убраны видимые рамки и курсор у выделяемого текста настроек.", "הוסרו מסגרות וסמן גלוי מטקסט ההגדרות הניתן לסימון.")
+            T("Made selectable settings text look like normal labels without visible caret or border.", "Выделяемый текст настроек сделан визуально обычными подписями без рамки и курсора.", "טקסט ניתן לבחירה עוצב כתווית רגילה ללא מסגרת או סמן.")
         });
 
         AddVersion("v0.20", new[]
         {
-            T("Redesigned the change log and made setting names selectable and copyable.", "Переработан список изменений, а названия настроек стали выделяемыми и копируемыми.", "עוצב מחדש יומן השינויים ושמות ההגדרות הפכו ניתנים לסימון ולהעתקה.")
+            T("Added formatted RichTextBox change log.", "Добавлен форматированный changelog на RichTextBox.", "נוסף יומן שינויים מעוצב ב-RichTextBox.")
         }, Array.Empty<string>());
 
         AddVersion("v0.19", new[]
         {
-            T("Added migration from the old Ctrl+Alt default to Insert.", "Добавлена миграция старого стандартного хоткея Ctrl+Alt на Insert.", "נוספה העברה מברירת המחדל Ctrl+Alt ל-Insert."),
-            T("Clipboard contents are preserved before correction and restored afterward.", "Буфер обмена сохраняется перед исправлением и восстанавливается после операции.", "תוכן הלוח נשמר לפני התיקון ומשוחזר לאחריו.")
+            T("Added settings migration, structured changelog and clipboard preservation.", "Добавлены миграция настроек, структурированный changelog и сохранение буфера обмена.", "נוספו העברת הגדרות, יומן שינויים מובנה ושמירת הלוח.")
         }, Array.Empty<string>());
 
         AddVersion("v0.18", Array.Empty<string>(), new[]
         {
-            T("Fixed compiler error CS0136 in TextFixer.cs.", "Исправлена ошибка компиляции CS0136 в TextFixer.cs.", "תוקנה שגיאת הקומפילציה CS0136 ב-TextFixer.cs.")
+            T("Fixed a C# variable-scope compile error.", "Исправлена ошибка компиляции C# области видимости переменной.", "תוקנה שגיאת קומפילציה בתחום משתנה ב-C#.")
         });
 
         AddVersion("v0.17", Array.Empty<string>(), new[]
         {
-            T("The terminal remains open when a build fails.", "При ошибке сборки терминал остаётся открытым.", "המסוף נשאר פתוח כאשר הבנייה נכשלת.")
+            T("Improved build error handling.", "Улучшена обработка ошибок сборки.", "שופרה טיפול בשגיאות בנייה.")
         });
 
         AddVersion("v0.16", new[]
         {
-            T("Added correction of selected text with fallback to the last word.", "Добавлено исправление выделенного текста с переходом к последнему слову при отсутствии выделения.", "נוסף תיקון טקסט מסומן עם מעבר למילה האחרונה כשאין סימון."),
-            T("Changed the default hotkey for this action to Insert.", "Хоткей по умолчанию для этой функции изменён на Insert.", "מקש ברירת המחדל לפעולה זו שונה ל-Insert."),
-            T("Added the Change log button.", "Добавлена кнопка «Список изменений».", "נוסף כפתור רשימת שינויים.")
+            T("Added selected-text-or-last-word correction and made Insert the default hotkey.", "Добавлено исправление выделенного текста или последнего слова; Insert стал хоткеем по умолчанию.", "נוסף תיקון טקסט מסומן או המילה האחרונה ו-Insert הפך לברירת המחדל.")
         }, Array.Empty<string>());
 
         AddVersion("v0.15", new[]
         {
-            T("Added free hotkey editing with combinations of up to 3 keys.", "Добавлен свободный редактор хоткеев с комбинациями до 3 клавиш.", "נוסף עורך מקשי קיצור עם צירופים של עד 3 מקשים.")
+            T("Added configurable 1–3 key hotkeys.", "Добавлены настраиваемые хоткеи из 1–3 клавиш.", "נוספו מקשי קיצור הניתנים להגדרה מ-1 עד 3 מקשים.")
         }, Array.Empty<string>());
 
         AddVersion("v0.14", new[]
         {
-            T("Started the v0.14, v0.15, v0.16... version scheme.", "Начата схема версий v0.14, v0.15, v0.16 и далее.", "החלה שיטת הגרסאות v0.14, v0.15, v0.16 וכן הלאה."),
-            T("Settings information text became selectable and copyable.", "Информационный текст в настройках можно выделять и копировать.", "ניתן לסמן ולהעתיק טקסט מידע בהגדרות.")
+            T("Started the numbered release scheme and made Settings information selectable/copyable.", "Начата схема нумерованных версий; информационный текст настроек стал выделяемым и копируемым.", "החלה שיטת הגרסאות הממוספרות וטקסט המידע הפך לניתן לבחירה ולהעתקה.")
         }, Array.Empty<string>());
 
         EnsureCurrentVersionListed();
