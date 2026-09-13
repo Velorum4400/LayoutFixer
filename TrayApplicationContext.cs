@@ -120,20 +120,21 @@ public sealed class TrayApplicationContext : ApplicationContext
 
         try
         {
-            int selectedLength =
+            SelectionPreserver.SelectionSnapshot? selectionSnapshot =
                 lastWord && _settings.KeepSelectionAfterCorrection
-                    ? SelectionPreserver.CaptureSelectedLength()
-                    : 0;
+                    ? SelectionPreserver.CaptureSelection()
+                    : null;
 
             if (TextFixer.TryFix(
                 lastWord,
                 out KeyboardLanguage from,
                 out KeyboardLanguage to))
             {
-                // Only restore a selection that existed before correction.
-                // When the action fell back to the last word, selectedLength is 0.
-                if (selectedLength > 0)
-                    SelectionPreserver.RestorePreviousSelection(selectedLength);
+                // Restore only a selection that existed before correction.
+                // Reusing the captured UIA range is usually immediate; controls
+                // that invalidate it fall back to a short caret-based restore.
+                if (selectionSnapshot?.HasSelection == true)
+                    SelectionPreserver.RestoreSelection(selectionSnapshot);
 
                 // No balloon notification: the correction itself is the feedback.
             }
