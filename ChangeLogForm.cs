@@ -42,6 +42,30 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.3.2", Array.Empty<string>(), new[]
+        {
+            T(
+                "Improved compatibility with Honeywell Voyager 1250g keyboard-wedge scanners that can split one barcode around an intermediate Enter/navigation-key sequence.",
+                "Улучшена совместимость со сканерами Honeywell Voyager 1250g в режиме keyboard wedge, которые могут разбивать один штрихкод промежуточной последовательностью Enter/навигационной клавиши.",
+                "שופרה התאימות לסורקי Honeywell Voyager 1250g במצב keyboard wedge שעלולים לפצל ברקוד אחד סביב רצף ביניים של Enter ומקש ניווט."),
+            T(
+                "Enter/Tab is now treated as a short-lived candidate scan terminator; if the selected scanner continues sending characters, LayoutFixer keeps one barcode buffer instead of correcting two fragments separately.",
+                "Enter/Tab теперь сначала считается кратковременным кандидатом на окончание скана; если выбранный сканер продолжает ввод, LayoutFixer сохраняет один буфер штрихкода вместо исправления двух частей по отдельности.",
+                "Enter/Tab נחשב כעת זמנית כמועמד לסיום הסריקה; אם הסורק הנבחר ממשיך לשלוח תווים, LayoutFixer שומר מאגר ברקוד אחד במקום לתקן שני חלקים בנפרד."),
+            T(
+                "Suppresses the Honeywell VK_DOWN continuation control during that short scanner window so the caret does not move before the remaining barcode characters arrive.",
+                "В коротком окне продолжения скана подавляется Honeywell VK_DOWN, чтобы курсор не сдвигался до прихода оставшихся символов штрихкода.",
+                "בחלון ההמשך הקצר של הסריקה מדוכא VK_DOWN של Honeywell כדי שהסמן לא יזוז לפני הגעת שאר תווי הברקוד.")
+        });
+
+        AddVersion("v1.3.1", Array.Empty<string>(), new[]
+        {
+            T(
+                "Clear log now clears both diagnostic.log and scaner_diagnostic.log.",
+                "Очистка лога теперь очищает и diagnostic.log, и scaner_diagnostic.log.",
+                "ניקוי הלוג מנקה כעת גם את diagnostic.log וגם את scaner_diagnostic.log.")
+        });
+
         AddVersion("v1.3.0", Array.Empty<string>(), new[]
         {
             T(
@@ -85,9 +109,9 @@ public sealed class ChangeLogForm : Form
                 "Увеличены блоки Selected device и информации про USB HID в конфигурации сканера, чтобы текст больше не обрезался.",
                 "הוגדלו אזורי המכשיר הנבחר והמידע על USB HID כדי למנוע חיתוך טקסט."),
             T(
-                "Added scanner_diagnostic.log with scanner detection, Raw Input, barcode buffering and SendInput diagnostics.",
-                "Добавлен scanner_diagnostic.log с диагностикой определения сканера, Raw Input, буфера штрихкода и SendInput.",
-                "נוסף scanner_diagnostic.log עם אבחון זיהוי סורק, Raw Input, מאגר ברקוד ו-SendInput.")
+                "Added scaner_diagnostic.log with scanner detection, Raw Input, barcode buffering and SendInput diagnostics.",
+                "Добавлен scaner_diagnostic.log с диагностикой определения сканера, Raw Input, буфера штрихкода и SendInput.",
+                "נוסף scaner_diagnostic.log עם אבחון זיהוי סורק, Raw Input, מאגר ברקוד ו-SendInput.")
         });
 
         AddVersion("v1.2.0", new[]
