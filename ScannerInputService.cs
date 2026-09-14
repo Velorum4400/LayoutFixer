@@ -31,7 +31,12 @@ public sealed class ScannerInputService : IDisposable
     private const int WM_KEYUP = 0x0101;
     private const int WM_SYSKEYDOWN = 0x0104;
     private const int WM_SYSKEYUP = 0x0105;
-    private const int TerminatorDrainDelayMs = 90;
+
+    // A scanner Enter/Tab is treated as a candidate suffix first. This is important
+    // for some Honeywell keyboard-wedge configurations that can emit Enter, then a
+    // navigation key, then continue sending the same barcode.
+    private const int TerminatorDecisionDelayMs = 110;
+    private const int ScannerControlWindowMs = 180;
 
     private readonly RawInputWindow _window;
     private readonly Dictionary<IntPtr, ScannerDeviceInfo> _deviceCache = new();
@@ -44,11 +49,11 @@ public sealed class ScannerInputService : IDisposable
     private IntPtr _identifyDevice;
     private DateTime _lastRuntimeInputUtc;
     private DateTime _lastIdentifyInputUtc;
+    private DateTime _pendingTerminatorUtc;
     private bool _runtimeShift;
     private bool _identifyShift;
-    private string? _pendingText;
-    private int _pendingTypedLength;
     private Keys? _pendingSuffix;
+    private int _terminatorGeneration;
 
     public bool IdentificationActive { get; private set; }
     public event Action<ScannerDeviceInfo, string>? ScannerIdentified;
@@ -74,6 +79,11 @@ public sealed class ScannerInputService : IDisposable
         _completionTimer.Tick += (_, _) =>
         {
             _completionTimer.Stop();
+
+            // If a candidate Enter/Tab is pending, let the terminator timer decide.
+            if (_pendingSuffix != null)
+                return;
+
             if (_runtimeBuffer.Length >= Math.Max(1, _settings.ScannerMinimumLength))
             {
                 ScannerDiagnosticLog.Write($"Runtime scan completed by timeout. length={_runtimeBuffer.Length}");
@@ -87,23 +97,27 @@ public sealed class ScannerInputService : IDisposable
             }
         };
 
-        _terminatorTimer = new System.Windows.Forms.Timer { Interval = TerminatorDrainDelayMs };
+        _terminatorTimer = new System.Windows.Forms.Timer { Interval = TerminatorDecisionDelayMs };
         _terminatorTimer.Tick += (_, _) =>
         {
             _terminatorTimer.Stop();
-            string? text = _pendingText;
-            int typedLength = _pendingTypedLength;
-            Keys? suffix = _pendingSuffix;
-            _pendingText = null;
-            _pendingTypedLength = 0;
-            _pendingSuffix = null;
 
-            if (string.IsNullOrEmpty(text) || typedLength <= 0)
+            if (_pendingSuffix == null)
                 return;
 
+            Keys suffix = _pendingSuffix.Value;
+            _pendingSuffix = null;
+
+            if (_runtimeBuffer.Length < Math.Max(1, _settings.ScannerMinimumLength))
+            {
+                ScannerDiagnosticLog.Write("Scanner terminator candidate expired but runtime buffer was too short.");
+                ResetRuntimeBuffer();
+                return;
+            }
+
             ScannerDiagnosticLog.Write(
-                $"Scanner post-hook drain timer fired after {TerminatorDrainDelayMs} ms. Beginning replacement.");
-            ScannerTextInjector.ReplacePreviousText(text, typedLength, suffix);
+                $"Scanner terminator confirmed after {TerminatorDecisionDelayMs} ms with no continuation. suffix={suffix}, length={_runtimeBuffer.Length}");
+            CompleteRuntimeScan(suffix);
         };
     }
 
@@ -111,14 +125,14 @@ public sealed class ScannerInputService : IDisposable
     {
         _settings = settings;
         ResetRuntimeBuffer();
-        CancelPendingReplacement();
+        CancelPendingTerminator();
         ScannerDiagnosticLog.Write(
             $"Scanner settings applied. enabled={settings.ScannerEnabled}, device='{settings.ScannerDisplayName}', VID={settings.ScannerVendorId}, PID={settings.ScannerProductId}, path='{settings.ScannerDevicePath}'");
     }
 
     public void BeginIdentification()
     {
-        CancelPendingReplacement();
+        CancelPendingTerminator();
         IdentificationActive = true;
         _identifyDevice = IntPtr.Zero;
         _identifyBuffer.Clear();
@@ -132,6 +146,7 @@ public sealed class ScannerInputService : IDisposable
     {
         if (IdentificationActive)
             ScannerDiagnosticLog.Write("Scanner identification cancelled.");
+
         IdentificationActive = false;
         _identifyDevice = IntPtr.Zero;
         _identifyBuffer.Clear();
@@ -142,6 +157,7 @@ public sealed class ScannerInputService : IDisposable
     {
         if (!_settings.ScannerEnabled || IdentificationActive || key is not (Keys.Enter or Keys.Tab))
             return false;
+
         if (_runtimeBuffer.Length < Math.Max(1, _settings.ScannerMinimumLength))
             return false;
 
@@ -149,27 +165,46 @@ public sealed class ScannerInputService : IDisposable
         if (ageMs > 350)
             return false;
 
-        string text = _runtimeBuffer.ToString();
-        int typedLength = _runtimeBuffer.Length;
-        ResetRuntimeBuffer();
+        _completionTimer.Stop();
+        _pendingSuffix = key;
+        _pendingTerminatorUtc = DateTime.UtcNow;
+        int generation = ++_terminatorGeneration;
 
         ScannerDiagnosticLog.Write(
-            $"Runtime terminator correlated in low-level hook. key={key}, ageMs={ageMs:F1}, text='{Sample(text)}', typedLength={typedLength}");
+            $"Runtime terminator correlated in low-level hook. key={key}, ageMs={ageMs:F1}, text='{Sample(_runtimeBuffer.ToString())}', typedLength={_runtimeBuffer.Length}; waiting for possible continuation.");
 
-        // Important: do not wait or inject while the low-level hook callback is active.
-        // The hook must return immediately so Windows can finish delivering the scanner's
-        // preceding legacy keyboard messages. Scheduling happens on the WinForms UI thread.
+        // Never wait in the low-level hook. Schedule the decision on the WinForms UI thread.
         _window.Post(() =>
         {
-            _pendingText = text;
-            _pendingTypedLength = typedLength;
-            _pendingSuffix = key;
+            if (_pendingSuffix != key || generation != _terminatorGeneration)
+                return;
+
             _terminatorTimer.Stop();
             _terminatorTimer.Start();
             ScannerDiagnosticLog.Write(
-                $"Scanner replacement scheduled outside keyboard hook. delay={TerminatorDrainDelayMs} ms");
+                $"Scanner terminator candidate scheduled outside keyboard hook. delay={TerminatorDecisionDelayMs} ms");
         });
 
+        return true;
+    }
+
+    public bool TryConsumeScannerControlKey(Keys key)
+    {
+        if (!_settings.ScannerEnabled || IdentificationActive || _pendingSuffix == null)
+            return false;
+
+        // Honeywell Voyager 1250g has been observed to emit VK_DOWN between two chunks
+        // of one scan. Suppress only this known navigation key, and only immediately
+        // after a scanner terminator candidate, to avoid interfering with normal typing.
+        if (key != Keys.Down)
+            return false;
+
+        double ageMs = (DateTime.UtcNow - _pendingTerminatorUtc).TotalMilliseconds;
+        if (ageMs < 0 || ageMs > ScannerControlWindowMs)
+            return false;
+
+        ScannerDiagnosticLog.Write(
+            $"Scanner continuation control correlated. key={key}, ageSinceTerminatorMs={ageMs:F1}");
         return true;
     }
 
@@ -180,7 +215,8 @@ public sealed class ScannerInputService : IDisposable
             uint size = 0;
             uint headerSize = (uint)Marshal.SizeOf<RAWINPUTHEADER>();
             GetRawInputData(rawInputHandle, RID_INPUT, IntPtr.Zero, ref size, headerSize);
-            if (size == 0) return;
+            if (size == 0)
+                return;
 
             IntPtr buffer = Marshal.AllocHGlobal((int)size);
             try
@@ -195,7 +231,8 @@ public sealed class ScannerInputService : IDisposable
                 int message = unchecked((int)raw.keyboard.Message);
                 bool down = message is WM_KEYDOWN or WM_SYSKEYDOWN;
                 bool up = message is WM_KEYUP or WM_SYSKEYUP;
-                if (!down && !up) return;
+                if (!down && !up)
+                    return;
 
                 ushort vk = raw.keyboard.VKey;
                 ScannerDeviceInfo device = GetDeviceInfo(raw.header.hDevice);
@@ -229,8 +266,14 @@ public sealed class ScannerInputService : IDisposable
         }
 
         _lastIdentifyInputUtc = now;
-        if (IsShift(vk)) { _identifyShift = down; return; }
-        if (!down) return;
+        if (IsShift(vk))
+        {
+            _identifyShift = down;
+            return;
+        }
+
+        if (!down)
+            return;
 
         if (vk is 0x0D or 0x09)
         {
@@ -238,12 +281,14 @@ public sealed class ScannerInputService : IDisposable
             {
                 string barcode = _identifyBuffer.ToString();
                 IdentificationActive = false;
-                ScannerDiagnosticLog.Write($"Scanner identified successfully: {device.DisplayName}; barcode='{Sample(barcode)}'; path='{device.DevicePath}'");
+                ScannerDiagnosticLog.Write(
+                    $"Scanner identified successfully: {device.DisplayName}; barcode='{Sample(barcode)}'; path='{device.DevicePath}'");
                 ScannerIdentified?.Invoke(device, barcode);
             }
             else
             {
-                ScannerDiagnosticLog.Write($"Identification terminator received but barcode was too short. length={_identifyBuffer.Length}");
+                ScannerDiagnosticLog.Write(
+                    $"Identification terminator received but barcode was too short. length={_identifyBuffer.Length}");
             }
             return;
         }
@@ -255,7 +300,8 @@ public sealed class ScannerInputService : IDisposable
         }
         else
         {
-            ScannerDiagnosticLog.Write($"Identification ignored unmapped key. VK=0x{vk:X2}, shift={_identifyShift}");
+            ScannerDiagnosticLog.Write(
+                $"Identification ignored unmapped key. VK=0x{vk:X2}, shift={_identifyShift}");
         }
     }
 
@@ -267,40 +313,73 @@ public sealed class ScannerInputService : IDisposable
             if (_runtimeBuffer.Length > 0)
                 ScannerDiagnosticLog.Write($"Runtime buffer reset after input gap. oldLength={_runtimeBuffer.Length}");
             ResetRuntimeBuffer();
+            CancelPendingTerminator();
         }
+
         _lastRuntimeInputUtc = now;
 
-        if (IsShift(vk)) { _runtimeShift = down; return; }
-        if (!down) return;
+        if (IsShift(vk))
+        {
+            _runtimeShift = down;
+            return;
+        }
+
+        if (!down)
+            return;
 
         if (vk is 0x0D or 0x09)
         {
-            // The low-level terminator hook normally consumes this first. If the
-            // runtime buffer is already empty, the scan has already been scheduled.
             if (_runtimeBuffer.Length >= Math.Max(1, _settings.ScannerMinimumLength))
-                ScannerDiagnosticLog.Write($"Raw Input terminator observed; waiting for low-level hook correlation. length={_runtimeBuffer.Length}");
+            {
+                ScannerDiagnosticLog.Write(
+                    $"Raw Input terminator observed; treating as candidate suffix. length={_runtimeBuffer.Length}");
+            }
             return;
         }
 
         if (TryMapUsKey(vk, _runtimeShift, out char c))
         {
+            if (_pendingSuffix != null)
+            {
+                Keys previousCandidate = _pendingSuffix.Value;
+                double gapMs = (now - _pendingTerminatorUtc).TotalMilliseconds;
+                _pendingSuffix = null;
+                _terminatorGeneration++;
+                _terminatorTimer.Stop();
+
+                ScannerDiagnosticLog.Write(
+                    $"Scanner continued after candidate terminator. previous={previousCandidate}, gapMs={gapMs:F1}, nextChar='{c}'. Keeping one barcode buffer.");
+            }
+
             _runtimeBuffer.Append(c);
             _completionTimer.Stop();
             _completionTimer.Start();
         }
         else
         {
-            ScannerDiagnosticLog.Write($"Runtime ignored unmapped key. VK=0x{vk:X2}, shift={_runtimeShift}");
+            // Do not cancel a candidate suffix for known non-text continuation controls.
+            ScannerDiagnosticLog.Write(
+                $"Runtime ignored unmapped key. VK=0x{vk:X2}, shift={_runtimeShift}, pendingSuffix={_pendingSuffix?.ToString() ?? "None"}");
         }
     }
 
     private void CompleteRuntimeScan(Keys? suffix)
     {
-        if (_runtimeBuffer.Length == 0) return;
+        if (_runtimeBuffer.Length == 0)
+            return;
+
         string text = _runtimeBuffer.ToString();
         int typedLength = _runtimeBuffer.Length;
-        ResetRuntimeBuffer();
-        ScannerDiagnosticLog.Write($"Runtime barcode ready: text='{Sample(text)}', typedLength={typedLength}, suffix={suffix?.ToString() ?? "None"}");
+
+        _completionTimer.Stop();
+        _terminatorTimer.Stop();
+        _runtimeBuffer.Clear();
+        _runtimeShift = false;
+        _pendingSuffix = null;
+        _terminatorGeneration++;
+
+        ScannerDiagnosticLog.Write(
+            $"Runtime barcode ready: text='{Sample(text)}', typedLength={typedLength}, suffix={suffix?.ToString() ?? "None"}");
         _window.Post(() => ScannerTextInjector.ReplacePreviousText(text, typedLength, suffix));
     }
 
@@ -311,12 +390,12 @@ public sealed class ScannerInputService : IDisposable
         _runtimeShift = false;
     }
 
-    private void CancelPendingReplacement()
+    private void CancelPendingTerminator()
     {
         _terminatorTimer.Stop();
-        _pendingText = null;
-        _pendingTypedLength = 0;
         _pendingSuffix = null;
+        _terminatorGeneration++;
+        _pendingTerminatorUtc = DateTime.MinValue;
     }
 
     private bool MatchesSelectedScanner(ScannerDeviceInfo device)
@@ -333,10 +412,12 @@ public sealed class ScannerInputService : IDisposable
 
     private ScannerDeviceInfo GetDeviceInfo(IntPtr hDevice)
     {
-        if (_deviceCache.TryGetValue(hDevice, out ScannerDeviceInfo? cached)) return cached;
+        if (_deviceCache.TryGetValue(hDevice, out ScannerDeviceInfo? cached))
+            return cached;
 
         string path = GetDevicePath(hDevice);
         Match match = Regex.Match(path, @"VID_([0-9A-F]{4}).*PID_([0-9A-F]{4})", RegexOptions.IgnoreCase);
+
         var info = new ScannerDeviceInfo
         {
             DevicePath = path,
@@ -345,7 +426,8 @@ public sealed class ScannerInputService : IDisposable
         };
 
         _deviceCache[hDevice] = info;
-        ScannerDiagnosticLog.Write($"Discovered HID keyboard device: {info.DisplayName}; path='{info.DevicePath}'");
+        ScannerDiagnosticLog.Write(
+            $"Discovered HID keyboard device: {info.DisplayName}; path='{info.DevicePath}'");
         return info;
     }
 
@@ -353,14 +435,16 @@ public sealed class ScannerInputService : IDisposable
     {
         uint size = 0;
         GetRawInputDeviceInfo(hDevice, RIDI_DEVICENAME, IntPtr.Zero, ref size);
-        if (size == 0) return "";
+        if (size == 0)
+            return "";
 
         IntPtr buffer = Marshal.AllocHGlobal(checked((int)size * 2));
         try
         {
             uint chars = size;
             uint result = GetRawInputDeviceInfo(hDevice, RIDI_DEVICENAME, buffer, ref chars);
-            if (result == uint.MaxValue) return "";
+            if (result == uint.MaxValue)
+                return "";
             return Marshal.PtrToStringUni(buffer) ?? "";
         }
         finally
@@ -374,6 +458,7 @@ public sealed class ScannerInputService : IDisposable
     private static bool TryMapUsKey(ushort vk, bool shift, out char value)
     {
         value = '\0';
+
         if (vk is >= 0x41 and <= 0x5A)
         {
             char c = (char)vk;
@@ -417,6 +502,7 @@ public sealed class ScannerInputService : IDisposable
             0xDE => shift ? '"' : '\'',
             _ => '\0'
         };
+
         return value != '\0';
     }
 
@@ -445,23 +531,39 @@ public sealed class ScannerInputService : IDisposable
         {
             _owner = owner;
             _dispatcher.CreateControl();
-            CreateHandle(new CreateParams { Caption = "LayoutFixer.RawInput", Parent = new IntPtr(-3) });
+            CreateHandle(new CreateParams
+            {
+                Caption = "LayoutFixer.RawInput",
+                Parent = new IntPtr(-3)
+            });
 
             RAWINPUTDEVICE[] devices =
             {
-                new() { usUsagePage = 0x01, usUsage = 0x06, dwFlags = RIDEV_INPUTSINK, hwndTarget = Handle }
+                new()
+                {
+                    usUsagePage = 0x01,
+                    usUsage = 0x06,
+                    dwFlags = RIDEV_INPUTSINK,
+                    hwndTarget = Handle
+                }
             };
 
             if (!RegisterRawInputDevices(devices, 1, (uint)Marshal.SizeOf<RAWINPUTDEVICE>()))
                 throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
 
-            ScannerDiagnosticLog.Write($"Raw Input keyboard registration succeeded. hwnd=0x{Handle.ToInt64():X}");
+            ScannerDiagnosticLog.Write(
+                $"Raw Input keyboard registration succeeded. hwnd=0x{Handle.ToInt64():X}");
         }
 
         public void Post(Action action)
         {
-            if (_dispatcher.IsDisposed) return;
-            try { _dispatcher.BeginInvoke(action); }
+            if (_dispatcher.IsDisposed)
+                return;
+
+            try
+            {
+                _dispatcher.BeginInvoke(action);
+            }
             catch (InvalidOperationException ex)
             {
                 ScannerDiagnosticLog.WriteException("Dispatcher BeginInvoke failed", ex);
@@ -472,6 +574,7 @@ public sealed class ScannerInputService : IDisposable
         {
             if (m.Msg == WM_INPUT)
                 _owner.ProcessRawInput(m.LParam);
+
             base.WndProc(ref m);
         }
 
@@ -481,8 +584,15 @@ public sealed class ScannerInputService : IDisposable
             {
                 RAWINPUTDEVICE[] devices =
                 {
-                    new() { usUsagePage = 0x01, usUsage = 0x06, dwFlags = RIDEV_REMOVE, hwndTarget = IntPtr.Zero }
+                    new()
+                    {
+                        usUsagePage = 0x01,
+                        usUsage = 0x06,
+                        dwFlags = RIDEV_REMOVE,
+                        hwndTarget = IntPtr.Zero
+                    }
                 };
+
                 RegisterRawInputDevices(devices, 1, (uint)Marshal.SizeOf<RAWINPUTDEVICE>());
                 ScannerDiagnosticLog.Write("Raw Input keyboard registration removed.");
             }
@@ -533,11 +643,23 @@ public sealed class ScannerInputService : IDisposable
     }
 
     [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool RegisterRawInputDevices([In] RAWINPUTDEVICE[] pRawInputDevices, uint uiNumDevices, uint cbSize);
+    private static extern bool RegisterRawInputDevices(
+        [In] RAWINPUTDEVICE[] pRawInputDevices,
+        uint uiNumDevices,
+        uint cbSize);
 
     [DllImport("user32.dll", SetLastError = true)]
-    private static extern uint GetRawInputData(IntPtr hRawInput, uint uiCommand, IntPtr pData, ref uint pcbSize, uint cbSizeHeader);
+    private static extern uint GetRawInputData(
+        IntPtr hRawInput,
+        uint uiCommand,
+        IntPtr pData,
+        ref uint pcbSize,
+        uint cbSizeHeader);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern uint GetRawInputDeviceInfo(IntPtr hDevice, uint uiCommand, IntPtr pData, ref uint pcbSize);
+    private static extern uint GetRawInputDeviceInfo(
+        IntPtr hDevice,
+        uint uiCommand,
+        IntPtr pData,
+        ref uint pcbSize);
 }
