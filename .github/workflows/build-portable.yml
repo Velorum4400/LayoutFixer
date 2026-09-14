@@ -1,0 +1,39 @@
+name: Build Portable
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-portable:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build portable package
+        shell: powershell
+        run: .\build-portable.ps1
+
+      - name: Read version
+        id: version
+        shell: powershell
+        run: |
+          [xml]$project = Get-Content .\LayoutFixer.csproj
+          $version = [string]($project.Project.PropertyGroup.Version | Select-Object -First 1)
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Upload portable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: LayoutFixer-Portable-${{ steps.version.outputs.version }}
+          path: portable/LayoutFixer-Portable-${{ steps.version.outputs.version }}.zip
+          if-no-files-found: error
