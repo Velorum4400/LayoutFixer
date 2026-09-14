@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
@@ -17,6 +18,7 @@ internal sealed class ScannerTerminatorHook : IDisposable
     private readonly LowLevelKeyboardProc _callback;
     private readonly IntPtr _hook;
     private readonly ScannerInputService _scanner;
+    private readonly HashSet<Keys> _suppressedScannerControls = new();
     private Keys? _suppressedTerminator;
 
     public ScannerTerminatorHook(ScannerInputService scanner)
@@ -55,24 +57,49 @@ internal sealed class ScannerTerminatorHook : IDisposable
             return CallNextHookEx(_hook, nCode, wParam, lParam);
 
         Keys key = (Keys)data.vkCode;
-        if (key is not (Keys.Enter or Keys.Tab))
-            return CallNextHookEx(_hook, nCode, wParam, lParam);
 
+        if (key is Keys.Enter or Keys.Tab)
+        {
+            if (down)
+            {
+                if (_suppressedTerminator == key)
+                    return (IntPtr)1;
+
+                if (_scanner.TryConsumeTerminator(key))
+                {
+                    _suppressedTerminator = key;
+                    ScannerDiagnosticLog.Write($"Physical scanner terminator suppressed: {key}");
+                    return (IntPtr)1;
+                }
+            }
+            else if (up && _suppressedTerminator == key)
+            {
+                _suppressedTerminator = null;
+                return (IntPtr)1;
+            }
+
+            return CallNextHookEx(_hook, nCode, wParam, lParam);
+        }
+
+        // Some keyboard-wedge scanners (notably Honeywell Voyager configurations)
+        // can emit a navigation key between two chunks of one barcode. Raw Input tells
+        // ScannerInputService that a scanner terminator is currently only a candidate;
+        // during that tiny continuation window we suppress the matching control key so
+        // it cannot move the caret before the rest of the barcode arrives.
         if (down)
         {
-            if (_suppressedTerminator == key)
+            if (_suppressedScannerControls.Contains(key))
                 return (IntPtr)1;
 
-            if (_scanner.TryConsumeTerminator(key))
+            if (_scanner.TryConsumeScannerControlKey(key))
             {
-                _suppressedTerminator = key;
-                ScannerDiagnosticLog.Write($"Physical scanner terminator suppressed: {key}");
+                _suppressedScannerControls.Add(key);
+                ScannerDiagnosticLog.Write($"Scanner continuation control suppressed: {key}");
                 return (IntPtr)1;
             }
         }
-        else if (up && _suppressedTerminator == key)
+        else if (up && _suppressedScannerControls.Remove(key))
         {
-            _suppressedTerminator = null;
             return (IntPtr)1;
         }
 
