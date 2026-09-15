@@ -15,6 +15,7 @@ internal static class ScannerTextInjector
     private const ushort VK_SHIFT = 0x10;
     private const ushort VK_CONTROL = 0x11;
     private const ushort VK_LEFT = 0x25;
+    private const ushort VK_BACK = 0x08;
     private const ushort VK_V = 0x56;
     private const ushort VK_RETURN = 0x0D;
     private const ushort VK_TAB = 0x09;
@@ -37,7 +38,7 @@ internal static class ScannerTextInjector
             return;
         }
 
-        ScannerDiagnosticLog.Write("UI Automation replacement unavailable; falling back to select-and-paste.");
+        ScannerDiagnosticLog.Write("UI Automation replacement unavailable; using RemoteApp-friendly backspace-and-paste fallback.");
         ReplaceWithClipboardFallback(englishText, typedLength, suffix);
     }
 
@@ -78,11 +79,7 @@ internal static class ScannerTextInjector
                     if (ranges is { Length: > 0 })
                     {
                         TextPatternRange prefix = textPattern.DocumentRange.Clone();
-                        prefix.MoveEndpointByRange(
-                            TextPatternRangeEndpoint.End,
-                            ranges[0],
-                            TextPatternRangeEndpoint.Start);
-
+                        prefix.MoveEndpointByRange(TextPatternRangeEndpoint.End, ranges[0], TextPatternRangeEndpoint.Start);
                         string beforeCaret = prefix.GetText(-1) ?? string.Empty;
                         caretOffset = Math.Min(beforeCaret.Length, currentValue.Length);
                         caretFromTextPattern = true;
@@ -97,30 +94,24 @@ internal static class ScannerTextInjector
 
             if (caretOffset < typedLength)
             {
-                ScannerDiagnosticLog.Write(
-                    $"UIA replacement rejected: caretOffset={caretOffset}, typedLength={typedLength}, valueLength={currentValue.Length}.");
+                ScannerDiagnosticLog.Write($"UIA replacement rejected: caretOffset={caretOffset}, typedLength={typedLength}, valueLength={currentValue.Length}.");
                 return false;
             }
 
             int replaceStart = caretOffset - typedLength;
             string newValue = currentValue[..replaceStart] + englishText + currentValue[caretOffset..];
-
-            ScannerDiagnosticLog.Write(
-                $"UIA replacement attempt: control='{SafeName(element)}', valueLength={currentValue.Length}, caretOffset={caretOffset}, caretFromTextPattern={caretFromTextPattern}, replaceStart={replaceStart}, typedLength={typedLength}.");
-
+            ScannerDiagnosticLog.Write($"UIA replacement attempt: control='{SafeName(element)}', valueLength={currentValue.Length}, caretOffset={caretOffset}, caretFromTextPattern={caretFromTextPattern}, replaceStart={replaceStart}, typedLength={typedLength}.");
             valuePattern.SetValue(newValue);
 
             int desiredCaret = replaceStart + englishText.Length;
             TryRestoreUiAutomationCaret(desiredCaret);
 
             AutomationElement? verifyElement = AutomationElement.FocusedElement;
-            if (verifyElement != null &&
-                verifyElement.TryGetCurrentPattern(ValuePattern.Pattern, out object? verifyPatternObject))
+            if (verifyElement != null && verifyElement.TryGetCurrentPattern(ValuePattern.Pattern, out object? verifyPatternObject))
             {
                 string verified = ((ValuePattern)verifyPatternObject).Current.Value ?? string.Empty;
                 bool matches = string.Equals(verified, newValue, StringComparison.Ordinal);
-                ScannerDiagnosticLog.Write(
-                    $"UIA replacement verification: success={matches}, resultingLength={verified.Length}.");
+                ScannerDiagnosticLog.Write($"UIA replacement verification: success={matches}, resultingLength={verified.Length}.");
                 return matches;
             }
 
@@ -139,29 +130,15 @@ internal static class ScannerTextInjector
         try
         {
             AutomationElement? element = AutomationElement.FocusedElement;
-            if (element == null ||
-                !element.TryGetCurrentPattern(TextPattern.Pattern, out object? textPatternObject))
-            {
-                return;
-            }
-
+            if (element == null || !element.TryGetCurrentPattern(TextPattern.Pattern, out object? textPatternObject)) return;
             var textPattern = (TextPattern)textPatternObject;
             TextPatternRange range = textPattern.DocumentRange.Clone();
-            range.MoveEndpointByRange(
-                TextPatternRangeEndpoint.End,
-                range,
-                TextPatternRangeEndpoint.Start);
-
-            if (offset > 0)
-                range.Move(TextUnit.Character, offset);
-
+            range.MoveEndpointByRange(TextPatternRangeEndpoint.End, range, TextPatternRangeEndpoint.Start);
+            if (offset > 0) range.Move(TextUnit.Character, offset);
             range.Select();
             ScannerDiagnosticLog.Write($"UIA caret restored to offset {offset}.");
         }
-        catch (Exception ex)
-        {
-            ScannerDiagnosticLog.WriteException("UIA caret restore failed", ex);
-        }
+        catch (Exception ex) { ScannerDiagnosticLog.WriteException("UIA caret restore failed", ex); }
     }
 
     private static string SafeName(AutomationElement element)
@@ -172,23 +149,14 @@ internal static class ScannerTextInjector
             string type = element.Current.ControlType?.ProgrammaticName ?? "unknown";
             return string.IsNullOrWhiteSpace(name) ? type : $"{name} ({type})";
         }
-        catch
-        {
-            return "unknown";
-        }
+        catch { return "unknown"; }
     }
 
     private static void ReplaceWithClipboardFallback(string englishText, int typedLength, Keys? suffix)
     {
         IDataObject? originalClipboard = null;
-        try
-        {
-            originalClipboard = Clipboard.GetDataObject();
-        }
-        catch (Exception ex)
-        {
-            ScannerDiagnosticLog.WriteException("Failed to capture clipboard before scanner paste", ex);
-        }
+        try { originalClipboard = Clipboard.GetDataObject(); }
+        catch (Exception ex) { ScannerDiagnosticLog.WriteException("Failed to capture clipboard before scanner paste", ex); }
 
         if (!TrySetClipboardText(englishText))
         {
@@ -198,33 +166,30 @@ internal static class ScannerTextInjector
 
         try
         {
-            var inputs = new List<INPUT>(typedLength * 2 + 10);
+            // Backspace is deliberately used instead of Shift+Left selection here. RemoteApp/RDP
+            // controls often expose no UIA text pattern and can ignore synthetic selection while
+            // still accepting ordinary editing keys such as Backspace and Ctrl+V.
+            var deleteInputs = new List<INPUT>(typedLength * 2);
+            for (int i = 0; i < typedLength; i++) AddVirtualKey(deleteInputs, VK_BACK);
+            Send(deleteInputs, "fallback-backspace");
+            Thread.Sleep(90);
 
-            AddKeyDown(inputs, VK_SHIFT);
-            for (int i = 0; i < typedLength; i++)
-                AddVirtualKey(inputs, VK_LEFT);
-            AddKeyUp(inputs, VK_SHIFT);
+            var pasteInputs = new List<INPUT>(4);
+            AddKeyDown(pasteInputs, VK_CONTROL);
+            AddVirtualKey(pasteInputs, VK_V);
+            AddKeyUp(pasteInputs, VK_CONTROL);
+            Send(pasteInputs, "fallback-paste");
+            Thread.Sleep(120);
 
-            AddKeyDown(inputs, VK_CONTROL);
-            AddVirtualKey(inputs, VK_V);
-            AddKeyUp(inputs, VK_CONTROL);
-
-            Send(inputs, "fallback-select-and-paste");
-            Thread.Sleep(70);
             SendSuffix(suffix);
-            Thread.Sleep(70);
+            Thread.Sleep(80);
         }
-        finally
-        {
-            RestoreClipboard(originalClipboard);
-        }
+        finally { RestoreClipboard(originalClipboard); }
     }
 
     private static void SendSuffix(Keys? suffix)
     {
-        if (suffix is not (Keys.Enter or Keys.Tab))
-            return;
-
+        if (suffix is not (Keys.Enter or Keys.Tab)) return;
         var suffixInputs = new List<INPUT>(2);
         AddVirtualKey(suffixInputs, suffix == Keys.Enter ? VK_RETURN : VK_TAB);
         Send(suffixInputs, $"suffix-{suffix}");
@@ -242,21 +207,16 @@ internal static class ScannerTextInjector
             }
             catch (ExternalException ex)
             {
-                if (attempt == 10)
-                    ScannerDiagnosticLog.WriteException("Failed to set scanner clipboard text", ex);
-                else
-                    Thread.Sleep(15);
+                if (attempt == 10) ScannerDiagnosticLog.WriteException("Failed to set scanner clipboard text", ex);
+                else Thread.Sleep(15);
             }
         }
-
         return false;
     }
 
     private static void RestoreClipboard(IDataObject? originalClipboard)
     {
-        if (originalClipboard is null)
-            return;
-
+        if (originalClipboard is null) return;
         for (int attempt = 1; attempt <= 10; attempt++)
         {
             try
@@ -267,28 +227,20 @@ internal static class ScannerTextInjector
             }
             catch (ExternalException ex)
             {
-                if (attempt == 10)
-                    ScannerDiagnosticLog.WriteException("Failed to restore clipboard after scanner paste", ex);
-                else
-                    Thread.Sleep(20);
+                if (attempt == 10) ScannerDiagnosticLog.WriteException("Failed to restore clipboard after scanner paste", ex);
+                else Thread.Sleep(20);
             }
         }
     }
 
     private static void Send(List<INPUT> inputs, string stage)
     {
-        if (inputs.Count == 0)
-            return;
-
+        if (inputs.Count == 0) return;
         INPUT[] array = inputs.ToArray();
         uint sent = SendInput((uint)array.Length, array, Marshal.SizeOf<INPUT>());
         int error = Marshal.GetLastWin32Error();
-
-        ScannerDiagnosticLog.Write(
-            $"Injection stage '{stage}': sent={sent}, expected={array.Length}, error={error}");
-
-        if (sent != array.Length)
-            CrashLogger.Write($"Scanner SendInput incomplete at {stage}: sent={sent}, expected={array.Length}, error={error}");
+        ScannerDiagnosticLog.Write($"Injection stage '{stage}': sent={sent}, expected={array.Length}, error={error}");
+        if (sent != array.Length) CrashLogger.Write($"Scanner SendInput incomplete at {stage}: sent={sent}, expected={array.Length}, error={error}");
     }
 
     private static string Sample(string value)
@@ -297,80 +249,14 @@ internal static class ScannerTextInjector
         return text.Length <= 100 ? text : text[..100] + "...";
     }
 
-    private static void AddVirtualKey(List<INPUT> inputs, ushort vk)
-    {
-        AddKeyDown(inputs, vk);
-        AddKeyUp(inputs, vk);
-    }
+    private static void AddVirtualKey(List<INPUT> inputs, ushort vk) { AddKeyDown(inputs, vk); AddKeyUp(inputs, vk); }
+    private static void AddKeyDown(List<INPUT> inputs, ushort vk) => inputs.Add(new INPUT { type = INPUT_KEYBOARD, U = new InputUnion { ki = new KEYBDINPUT { wVk = vk } } });
+    private static void AddKeyUp(List<INPUT> inputs, ushort vk) => inputs.Add(new INPUT { type = INPUT_KEYBOARD, U = new InputUnion { ki = new KEYBDINPUT { wVk = vk, dwFlags = KEYEVENTF_KEYUP } } });
 
-    private static void AddKeyDown(List<INPUT> inputs, ushort vk)
-    {
-        inputs.Add(new INPUT
-        {
-            type = INPUT_KEYBOARD,
-            U = new InputUnion
-            {
-                ki = new KEYBDINPUT { wVk = vk }
-            }
-        });
-    }
-
-    private static void AddKeyUp(List<INPUT> inputs, ushort vk)
-    {
-        inputs.Add(new INPUT
-        {
-            type = INPUT_KEYBOARD,
-            U = new InputUnion
-            {
-                ki = new KEYBDINPUT { wVk = vk, dwFlags = KEYEVENTF_KEYUP }
-            }
-        });
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct INPUT
-    {
-        public uint type;
-        public InputUnion U;
-    }
-
-    [StructLayout(LayoutKind.Explicit)]
-    private struct InputUnion
-    {
-        [FieldOffset(0)] public MOUSEINPUT mi;
-        [FieldOffset(0)] public KEYBDINPUT ki;
-        [FieldOffset(0)] public HARDWAREINPUT hi;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct KEYBDINPUT
-    {
-        public ushort wVk;
-        public ushort wScan;
-        public uint dwFlags;
-        public uint time;
-        public UIntPtr dwExtraInfo;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MOUSEINPUT
-    {
-        public int dx;
-        public int dy;
-        public uint mouseData;
-        public uint dwFlags;
-        public uint time;
-        public UIntPtr dwExtraInfo;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct HARDWAREINPUT
-    {
-        public uint uMsg;
-        public ushort wParamL;
-        public ushort wParamH;
-    }
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern uint SendInput(uint cInputs, INPUT[] pInputs, int cbSize);
+    [StructLayout(LayoutKind.Sequential)] private struct INPUT { public uint type; public InputUnion U; }
+    [StructLayout(LayoutKind.Explicit)] private struct InputUnion { [FieldOffset(0)] public MOUSEINPUT mi; [FieldOffset(0)] public KEYBDINPUT ki; [FieldOffset(0)] public HARDWAREINPUT hi; }
+    [StructLayout(LayoutKind.Sequential)] private struct KEYBDINPUT { public ushort wVk; public ushort wScan; public uint dwFlags; public uint time; public UIntPtr dwExtraInfo; }
+    [StructLayout(LayoutKind.Sequential)] private struct MOUSEINPUT { public int dx; public int dy; public uint mouseData; public uint dwFlags; public uint time; public UIntPtr dwExtraInfo; }
+    [StructLayout(LayoutKind.Sequential)] private struct HARDWAREINPUT { public uint uMsg; public ushort wParamL; public ushort wParamH; }
+    [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint cInputs, INPUT[] pInputs, int cbSize);
 }
