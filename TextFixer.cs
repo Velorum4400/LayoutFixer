@@ -22,6 +22,7 @@ public static class TextFixer
     private const int VK_BACK = 0x08;
 
     private const uint KEYEVENTF_KEYUP = 0x0002;
+    private const uint KEYEVENTF_UNICODE = 0x0004;
     private const uint WM_INPUTLANGCHANGEREQUEST = 0x0050;
     private const uint WM_COPY = 0x0301;
     private const uint INPUT_KEYBOARD = 1;
@@ -51,6 +52,7 @@ public static class TextFixer
         Log($"========== START lastWord={lastWord}, target=0x{targetWindow.ToInt64():X}, focus=0x{focusWindow.ToInt64():X}, currentLayout={(currentLayout?.ToString() ?? "Unsupported")}, available=[{available}]");
 
         ClipboardSnapshot clipboardSnapshot = CaptureClipboardSnapshot();
+        bool clipboardChanged = false;
         Log($"TIMING clipboard snapshot: {elapsed.ElapsedMilliseconds} ms");
 
         try
@@ -63,9 +65,6 @@ public static class TextFixer
                 Log("FAIL: focus changed while preparing correction");
                 return false;
             }
-            TryClearClipboard();
-            Log("Clipboard clear attempted");
-
             string? original;
             LastWordTarget? lastWordTarget = null;
 
@@ -109,6 +108,9 @@ public static class TextFixer
                 // instead of appending the converted text after it.
                 if (lastWord)
                 {
+                    TryClearClipboard();
+                    clipboardChanged = true;
+                    Log("Clipboard clear attempted for keyboard fallback");
                     Log("UIA last-word selection unavailable; trying Ctrl+Shift+Left keyboard fallback");
                     SelectPreviousWordWithKeyboard();
                     Thread.Sleep(40);
@@ -166,10 +168,26 @@ public static class TextFixer
 
             Log($"Converted sample={Sample(converted)}");
 
-            // A UIA range can contain the whole word even when Select() only
-            // selects its numeric bidi run. Copy tests the editor's real selection.
-            bool useBackspace = lastWordTarget != null && !SelectionCopiesExactly(original);
-            Log($"TIMING selection checked: {elapsed.ElapsedMilliseconds} ms");
+            // Chromium and Qt can report the complete UIA range while their
+            // visual selection contains only a bidi run. Use the saved logical
+            // caret, delete the known word and send Unicode directly.
+            if (lastWordTarget != null)
+            {
+                if (!DeleteLastWord(lastWordTarget, original, targetWindow))
+                    return false;
+                if (GetForegroundWindow() != targetWindow || GetFocusedWindow(targetWindow) != focusWindow)
+                {
+                    Log("FAIL: focus changed before direct Unicode replacement");
+                    return false;
+                }
+                SendUnicodeText(converted);
+                Log($"Last-word replacement sent as direct Unicode text, length={converted.Length}");
+                Log($"TIMING direct replacement: {elapsed.ElapsedMilliseconds} ms");
+                SwitchForegroundLayout(targetWindow, focusWindow, to);
+                Log("Layout switch request sent");
+                Log("SUCCESS");
+                return true;
+            }
 
             if (GetForegroundWindow() != targetWindow || GetFocusedWindow(targetWindow) != focusWindow)
             {
@@ -183,12 +201,10 @@ public static class TextFixer
                 Log("FAIL: could not write converted text to clipboard");
                 return false;
             }
+            clipboardChanged = true;
 
             Log("Converted text placed into clipboard");
             Log($"TIMING clipboard publish end: {elapsed.ElapsedMilliseconds} ms");
-
-            if (useBackspace && !DeleteLastWord(lastWordTarget!, original, targetWindow))
-                return false;
 
             if (GetForegroundWindow() != targetWindow || GetFocusedWindow(targetWindow) != focusWindow)
             {
@@ -241,7 +257,8 @@ public static class TextFixer
         }
         finally
         {
-            RestoreClipboardSnapshot(clipboardSnapshot);
+            if (clipboardChanged)
+                RestoreClipboardSnapshot(clipboardSnapshot);
             Log($"TIMING total: {elapsed.ElapsedMilliseconds} ms");
             Log("========== END ==========" + Environment.NewLine);
         }
@@ -748,6 +765,17 @@ public static class TextFixer
         });
     }
 
+    private static void SendUnicodeText(string text)
+    {
+        var inputs = new INPUT[checked(text.Length * 2)];
+        for (int i = 0; i < text.Length; i++)
+        {
+            inputs[i * 2] = UnicodeKey(text[i], false);
+            inputs[i * 2 + 1] = UnicodeKey(text[i], true);
+        }
+        SendKeys(inputs);
+    }
+
     private static void Copy() => SendChord(VK_CONTROL, VK_C);
     private static bool Paste() => SendChord(VK_CONTROL, VK_V);
 
@@ -771,6 +799,20 @@ public static class TextFixer
             {
                 wVk = (ushort)vk,
                 dwFlags = up ? KEYEVENTF_KEYUP : 0,
+                dwExtraInfo = GetMessageExtraInfo()
+            }
+        }
+    };
+
+    private static INPUT UnicodeKey(char character, bool up) => new()
+    {
+        type = INPUT_KEYBOARD,
+        U = new InputUnion
+        {
+            ki = new KEYBDINPUT
+            {
+                wScan = character,
+                dwFlags = KEYEVENTF_UNICODE | (up ? KEYEVENTF_KEYUP : 0),
                 dwExtraInfo = GetMessageExtraInfo()
             }
         }

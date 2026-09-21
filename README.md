@@ -2,6 +2,14 @@
 
 Windows tray utility for correcting text typed in the wrong keyboard layout.
 
+## 1.3.9 — direct Unicode replacement
+
+When UI Automation provides a verified logical end of the last word, LayoutFixer
+deletes that word and sends the converted Unicode characters directly. This is
+used for Chromium and Qt editors such as ChatGPT and Telegram, so the correction
+does not need to open, write or restore the clipboard. The log records
+`Last-word replacement sent as direct Unicode text`.
+
 ## 1.3.8 — clipboard publication and log viewer
 
 Converted text is published as eagerly rendered Unicode through the native

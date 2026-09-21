@@ -1,4 +1,4 @@
-# Last-word replacement regression checks (1.3.8)
+# Last-word replacement regression checks (1.3.9)
 
 Run `dotnet run --project tests/Regression/Regression.csproj -c Release` for
 conversion, deletion-count safety, portable paths and native Edit/RichEdit
@@ -46,3 +46,9 @@ clears only its own file. Verify scanner history migrates from the old
 `scaner_diagnostic.log` filename and correction actions have START/END markers.
 Automated checks now also exercise native Unicode clipboard publication
 (restoring the previous clipboard), tab clear handlers and legacy-log migration.
+
+For 1.3.9, test ChatGPT and Telegram after `Native last-word` has a usable UIA
+word. Expect `Last-word replacement sent as direct Unicode text`; there must be
+no `TIMING clipboard publish` or `Clipboard restored` lines for that action.
+The correction must leave the user's clipboard unchanged and should complete
+without waiting for clipboard ownership.

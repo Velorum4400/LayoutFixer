@@ -28,6 +28,8 @@ Check(LayoutConverter.Convert("4400הקךםרוצ", KeyboardLanguage.Hebrew, Key
     == "velorum4400", "reported Hebrew + digits conversion");
 Check(LayoutConverter.Convert("руддщ", KeyboardLanguage.Russian, KeyboardLanguage.English)
     == "hello", "ordinary Russian conversion");
+Check(typeof(TextFixer).GetMethod("SendUnicodeText", BindingFlags.NonPublic | BindingFlags.Static) != null,
+    "direct Unicode replacement is available without clipboard publication");
 
 string marker = Path.Combine(AppContext.BaseDirectory, AppRuntime.PortableMarkerFileName);
 File.WriteAllText(marker, "regression test");

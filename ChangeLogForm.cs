@@ -42,6 +42,14 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.3.9", Array.Empty<string>(), new[]
+        {
+            T(
+                "Last-word replacement in Chromium and Qt editors now deletes the verified word and sends converted Unicode characters directly, avoiding locked clipboard failures and clipboard restoration delays.",
+                "Замена последнего слова в редакторах Chromium и Qt теперь удаляет проверенное слово и вводит преобразованные Unicode-символы напрямую, обходя ошибки занятого буфера и задержки его восстановления.",
+                "החלפת המילה האחרונה בעורכי Chromium ו-Qt מוחקת כעת את המילה המאומתת ושולחת תווי Unicode שהומרו ישירות, וכך עוקפת כשלי לוח נעול ועיכובים בשחזור הלוח.")
+        });
+
         AddVersion("v1.3.8", Array.Empty<string>(), new[]
         {
             T(
