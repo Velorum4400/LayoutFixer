@@ -39,6 +39,13 @@ public static class LayoutConverter
     private static string? _lastHebrewSourceText;
     private static KeyboardLanguage _lastHebrewSourceLanguage;
     private static DateTime _lastHebrewConversionUtc;
+    // Keep the original logical text through a short sequence of corrections.
+    // This preserves genuine foreign terms inside text that was converted only
+    // for its surrounding keyboard-layout characters.
+    private static string? _lastCorrectionOutput;
+    private static string? _lastCorrectionOriginalText;
+    private static KeyboardLanguage _lastCorrectionOriginalLanguage;
+    private static DateTime _lastCorrectionUtc;
 
     public static KeyboardLanguage DetectLanguage(string text, KeyboardLanguage fallback)
     {
@@ -77,6 +84,13 @@ public static class LayoutConverter
         if (string.IsNullOrEmpty(text) || from == to)
             return text;
 
+        if (TryRecoverOriginalText(text, out string? originalText, out KeyboardLanguage originalLanguage))
+        {
+            string recovered = ConvertCore(originalText!, originalLanguage, to);
+            RememberCorrection(recovered, originalText!, originalLanguage);
+            return recovered;
+        }
+
         // Hebrew contains several characters that can represent more than one
         // physical key position. For example '?' may come from different shifted
         // keys. If this Hebrew text was produced by LayoutFixer moments ago, use
@@ -88,6 +102,7 @@ public static class LayoutConverter
         {
             string exact = ConvertCore(priorText!, priorLanguage, to);
             ClearHebrewRecovery();
+            RememberCorrection(exact, priorText!, priorLanguage);
             return exact;
         }
 
@@ -99,7 +114,47 @@ public static class LayoutConverter
         else
             ClearHebrewRecovery();
 
+        RememberCorrection(converted, text, from);
+
         return converted;
+    }
+
+    private static bool TryRecoverOriginalText(
+        string text,
+        out string? originalText,
+        out KeyboardLanguage originalLanguage)
+    {
+        lock (RecoveryLock)
+        {
+            originalText = null;
+            originalLanguage = KeyboardLanguage.English;
+            if (DateTime.UtcNow - _lastCorrectionUtc > TimeSpan.FromSeconds(15))
+            {
+                _lastCorrectionOutput = null;
+                _lastCorrectionOriginalText = null;
+                return false;
+            }
+            if (!string.Equals(text, _lastCorrectionOutput, StringComparison.Ordinal) ||
+                string.IsNullOrEmpty(_lastCorrectionOriginalText))
+                return false;
+            originalText = _lastCorrectionOriginalText;
+            originalLanguage = _lastCorrectionOriginalLanguage;
+            return true;
+        }
+    }
+
+    private static void RememberCorrection(
+        string output,
+        string originalText,
+        KeyboardLanguage originalLanguage)
+    {
+        lock (RecoveryLock)
+        {
+            _lastCorrectionOutput = output;
+            _lastCorrectionOriginalText = originalText;
+            _lastCorrectionOriginalLanguage = originalLanguage;
+            _lastCorrectionUtc = DateTime.UtcNow;
+        }
     }
 
     private static string ConvertCore(

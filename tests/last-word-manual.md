@@ -1,4 +1,4 @@
-# Last-word replacement regression checks (1.3.9)
+# Last-word replacement regression checks (1.3.10)
 
 Run `dotnet run --project tests/Regression/Regression.csproj -c Release` for
 conversion, deletion-count safety, portable paths and native Edit/RichEdit
@@ -52,3 +52,8 @@ word. Expect `Last-word replacement sent as direct Unicode text`; there must be
 no `TIMING clipboard publish` or `Clipboard restored` lines for that action.
 The correction must leave the user's clipboard unchanged and should complete
 without waiting for clipboard ownership.
+
+For 1.3.10, run RU → HE → EN → RU within 15 seconds on Russian text containing
+`Gamer's Nexus`, `LG` and `Wi-Fi`. The final result must exactly match the
+original text. Then run a separate correction on `Gamer's Nexus` alone and
+confirm it still converts to Russian.

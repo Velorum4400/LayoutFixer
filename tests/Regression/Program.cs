@@ -28,6 +28,13 @@ Check(LayoutConverter.Convert("4400הקךםרוצ", KeyboardLanguage.Hebrew, Key
     == "velorum4400", "reported Hebrew + digits conversion");
 Check(LayoutConverter.Convert("руддщ", KeyboardLanguage.Russian, KeyboardLanguage.English)
     == "hello", "ordinary Russian conversion");
+string mixedRussian = "В ролике авторы Gamer's Nexus показали модели LG и Wi-Fi";
+string mixedHebrew = LayoutConverter.Convert(mixedRussian, KeyboardLanguage.Russian, KeyboardLanguage.Hebrew);
+string mixedEnglish = LayoutConverter.Convert(mixedHebrew, KeyboardLanguage.Hebrew, KeyboardLanguage.English);
+Check(LayoutConverter.Convert(mixedEnglish, KeyboardLanguage.English, KeyboardLanguage.Russian) == mixedRussian,
+    "RU → HE → EN → RU preserves embedded English names and Wi-Fi");
+Check(LayoutConverter.Convert("Gamer's Nexus", KeyboardLanguage.English, KeyboardLanguage.Russian) == "Пфьукэы Тучгы",
+    "ordinary standalone English conversion remains available");
 Check(typeof(TextFixer).GetMethod("SendUnicodeText", BindingFlags.NonPublic | BindingFlags.Static) != null,
     "direct Unicode replacement is available without clipboard publication");
 

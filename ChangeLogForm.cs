@@ -42,6 +42,14 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.3.10", Array.Empty<string>(), new[]
+        {
+            T(
+                "Fixed rapid multi-layout cycles corrupting genuine English names and terms embedded in Russian text. Exact recent conversion output now retains the original logical text through the next correction.",
+                "Исправлены быстрые циклы смены раскладок, повреждавшие настоящие английские имена и термины внутри русского текста. Точный недавний результат сохраняет исходный логический текст для следующего исправления.",
+                "תוקנו מחזורי החלפת פריסות מהירים שפגעו בשמות ובמונחים אמיתיים באנגלית המוטמעים בטקסט רוסי. תוצאת המרה מדויקת נשמרת עם הטקסט הלוגי המקורי לתיקון הבא.")
+        });
+
         AddVersion("v1.3.9", Array.Empty<string>(), new[]
         {
             T(

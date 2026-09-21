@@ -2,6 +2,14 @@
 
 Windows tray utility for correcting text typed in the wrong keyboard layout.
 
+## 1.3.10 — mixed-language correction cycles
+
+Successive corrections within 15 seconds retain the original logical text when
+the document exactly matches the preceding conversion result. A RU → HE → EN →
+RU cycle therefore restores the original Russian text while preserving genuine
+English terms such as `Gamer's Nexus`, `LG` and `Wi-Fi`. Standalone English text
+continues to convert normally.
+
 ## 1.3.9 — direct Unicode replacement
 
 When UI Automation provides a verified logical end of the last word, LayoutFixer
