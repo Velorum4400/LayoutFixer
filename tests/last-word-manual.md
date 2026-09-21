@@ -1,4 +1,4 @@
-# Last-word replacement regression checks (1.3.7)
+# Last-word replacement regression checks (1.3.8)
 
 Run `dotnet run --project tests/Regression/Regression.csproj -c Release` for
 conversion, deletion-count safety, portable paths and native Edit/RichEdit
@@ -39,3 +39,10 @@ keyboard remain responsive. Compare the full START-to-TIMING-total interval;
 per-stage TIMING values are cumulative, so their differences locate remaining
 latency. A slow UIA provider may still take time, but must not block the hook
 thread. Rapid repeat hotkeys and scanner corrections must not overlap.
+
+For 1.3.8, compare `TIMING clipboard publish start` and `end` in ChatGPT.
+Confirm settings has Open log, both tabs refresh, and each Clear log button
+clears only its own file. Verify scanner history migrates from the old
+`scaner_diagnostic.log` filename and correction actions have START/END markers.
+Automated checks now also exercise native Unicode clipboard publication
+(restoring the previous clipboard), tab clear handlers and legacy-log migration.

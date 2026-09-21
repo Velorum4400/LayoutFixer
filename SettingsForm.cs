@@ -147,7 +147,7 @@ public sealed class SettingsForm : Form
         _changelog = new ModernButton { Left = 28, Width = 170, Height = 42, Primary = false };
         _changelog.Click += (_, _) => { using var form = new ChangeLogForm(UiText.Language); form.ShowDialog(this); };
         _clearLog = new ModernButton { Left = 210, Width = 170, Height = 42, Primary = false };
-        _clearLog.Click += (_, _) => { using var form = new ClearLogForm(); form.ShowDialog(this); };
+        _clearLog.Click += (_, _) => { using var form = new LogViewerForm(); form.ShowDialog(this); };
         _preferencesCard.Controls.AddRange(new Control[] { _preferencesTitle, _languageLabel, _language, _startup, _installedTitle, _availableLayouts, _info, _changelog, _clearLog });
     }
 
@@ -269,7 +269,7 @@ public sealed class SettingsForm : Form
         _info.Text = UiText.Get("supported_info");
         _availableLayouts.Text = string.Join("   •   ", KeyboardLayout.AvailableLanguages.Select(KeyboardLayout.DisplayName));
         _changelog.Text = UiText.Get("changelog");
-        _clearLog.Text = UiText.Get("clear_log");
+        _clearLog.Text = UiText.Get("open_log");
         _defaults.Text = UiText.Get("defaults");
         _save.Text = UiText.Get("save");
 

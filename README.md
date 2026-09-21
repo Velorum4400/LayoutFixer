@@ -2,6 +2,17 @@
 
 Windows tray utility for correcting text typed in the wrong keyboard layout.
 
+## 1.3.8 — clipboard publication and log viewer
+
+Converted text is published as eagerly rendered Unicode through the native
+Windows clipboard API, avoiding OLE publication waits. The user's original
+clipboard is still restored after the paste. Timing logs bracket publication.
+The settings button now opens a live viewer with `diagnostic.log` and
+`scanner_diagnostic.log` tabs and a separate Clear log button on each tab.
+Existing `scaner_diagnostic.log` is renamed automatically when the new file
+does not exist. Correction actions are delimited by START and END, including
+failed actions. Large logs display their last 512 KB without truncating files.
+
 ## 1.3.7 — responsive correction
 
 Correction runs on a separate STA worker, keeping the tray UI and low-level

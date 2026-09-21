@@ -42,6 +42,18 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.3.8", Array.Empty<string>(), new[]
+        {
+            T(
+                "Publish converted Unicode text directly to the Windows clipboard to avoid the slow OLE publication path observed with Chromium. Added clipboard publication timing.",
+                "Исправленный Unicode-текст записывается напрямую в буфер Windows, обходя медленный путь OLE при работе с Chromium. Добавлен замер времени записи в буфер.",
+                "טקסט Unicode מתוקן נכתב ישירות ללוח Windows כדי לעקוף את מסלול OLE האיטי ב-Chromium. נוסף מדד זמן לכתיבה ללוח."),
+            T(
+                "Replaced Clear log with Open log: two live tabs, separate clear buttons, START/END action boundaries, and scanner_diagnostic.log with migration of the old filename.",
+                "Вместо «Очистить лог» добавлено «Открыть лог»: две обновляемые вкладки, отдельные кнопки очистки, границы действий START/END и scanner_diagnostic.log с переносом старого файла.",
+                "נוסף פתח יומן במקום נקה יומן: שתי לשוניות מתעדכנות, ניקוי נפרד, גבולות START/END ושם scanner_diagnostic.log עם העברת הקובץ הישן.")
+        });
+
         AddVersion("v1.3.7", Array.Empty<string>(), new[]
         {
             T(

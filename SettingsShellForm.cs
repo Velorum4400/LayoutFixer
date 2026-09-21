@@ -267,7 +267,7 @@ public sealed class SettingsShellForm : Form
 
         _clearLog.SetBounds(228, 432, 180, 42);
         _clearLog.Primary = false;
-        _clearLog.Click += (_, _) => { using var form = new ClearLogForm(); form.ShowDialog(this); };
+        _clearLog.Click += (_, _) => { using var form = new LogViewerForm(); form.ShowDialog(this); };
 
         card.Controls.AddRange(new Control[] { _languageLabel, _language, _startup, _layoutsTitle, _layoutsValue, _generalInfo, _changeLog, _clearLog });
         _generalPage.Controls.Add(card);
@@ -612,7 +612,7 @@ public sealed class SettingsShellForm : Form
         _layoutsValue.Text = string.Join(", ", KeyboardLayout.AvailableLanguages.Select(KeyboardLayout.ShortName));
         _generalInfo.Text = UiText.Get("supported_info");
         _changeLog.Text = UiText.Get("changelog");
-        _clearLog.Text = UiText.Get("clear_log");
+        _clearLog.Text = UiText.Get("open_log");
 
         _scannerEnabled.Text = UiText.Get("scanner_enable");
         _scannerIntro.Text = UiText.Get("scanner_intro");

@@ -57,6 +57,9 @@ public static class UiText
         ["version"] = L("Version:", "Версия:", "גרסה:"),
         ["changelog"] = L("Change log", "Список изменений", "רשימת שינויים"),
         ["clear_log"] = L("Clear log", "Очистить лог", "נקה לוג"),
+        ["open_log"] = L("Open log", "Открыть лог", "פתח יומן"),
+        ["log_tail"] = L("Showing the last 512 KB of the log.", "Показаны последние 512 КБ лога.", "מוצגים 512 הקילובייט האחרונים של היומן."),
+        ["log_read_failed"] = L("Could not read log", "Не удалось прочитать лог", "לא ניתן לקרוא את היומן"),
         ["clear_log_confirm"] = L(
             "Do you really want to clear the log?",
             "Действительно вы хотите очистить лог?",

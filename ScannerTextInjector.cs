@@ -22,6 +22,13 @@ internal static class ScannerTextInjector
 
     public static void ReplacePreviousText(string englishText, int typedLength, Keys? suffix)
     {
+        ScannerDiagnosticLog.Write("========== START scanner replacement ==========");
+        try { ReplacePreviousTextCore(englishText, typedLength, suffix); }
+        finally { ScannerDiagnosticLog.Write("========== END scanner replacement ==========" + Environment.NewLine); }
+    }
+
+    private static void ReplacePreviousTextCore(string englishText, int typedLength, Keys? suffix)
+    {
         if (string.IsNullOrEmpty(englishText) || typedLength <= 0)
         {
             ScannerDiagnosticLog.Write($"Injection skipped: empty text or invalid typedLength={typedLength}");
@@ -201,7 +208,7 @@ internal static class ScannerTextInjector
         {
             try
             {
-                Clipboard.SetText(text, TextDataFormat.UnicodeText);
+                if (!NativeClipboard.TrySetText(text)) return false;
                 ScannerDiagnosticLog.Write($"Scanner clipboard set successfully on attempt {attempt}.");
                 return true;
             }

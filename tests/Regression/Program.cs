@@ -77,6 +77,65 @@ var nativeThread = new Thread(() =>
         using var button = new System.Windows.Forms.Button();
         object?[] unsupported = { button.Handle, null, null };
         Check(!(bool)select.Invoke(null, unsupported)!, "non-edit controls retain UIA fallback");
+        // Exercise the real clipboard, restoring every captured format afterwards.
+        var capture = typeof(TextFixer).GetMethod("CaptureClipboardSnapshot", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var restore = typeof(TextFixer).GetMethod("RestoreClipboardSnapshot", BindingFlags.NonPublic | BindingFlags.Static)!;
+        object snapshot = capture.Invoke(null, null)!;
+        try
+        {
+            var publish = typeof(TextFixer).Assembly.GetType("LayoutFixer.NativeClipboard")!.GetMethod("TrySetText")!;
+            Check((bool)publish.Invoke(null, new object[] { "тест שלום 123" })!, "native Unicode clipboard publish");
+            Check(System.Windows.Forms.Clipboard.GetText() == "тест שלום 123", "native clipboard survives owner window disposal");
+        }
+        finally { restore.Invoke(null, new[] { snapshot }); }
+
+        File.WriteAllText(marker, "regression test");
+        try
+        {
+            var logs = typeof(TextFixer).Assembly.GetType("LayoutFixer.DiagnosticLogStore")!;
+            var write = logs.GetMethod("Write")!;
+            var read = logs.GetMethod("Read")!;
+            var clear = logs.GetMethod("Clear")!;
+            clear.Invoke(null, new object[] { false });
+            clear.Invoke(null, new object[] { true });
+            write.Invoke(null, new object[] { false, "========== START ==========\r\nCorrection completed\r\n========== END ==========" });
+            write.Invoke(null, new object[] { true, "========== START scanner ==========\r\nBarcode completed\r\n========== END scanner ==========" });
+            UiText.Language = "ru";
+            using var viewer = new LogViewerForm();
+            viewer.CreateControl();
+            var tabs = viewer.Controls.OfType<System.Windows.Forms.TabControl>().Single();
+            Check(tabs.TabPages.Count == 2, "log viewer has two tabs");
+            var refresh = typeof(LogViewerForm).GetMethod("RefreshLog", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            refresh.Invoke(viewer, new object[] { 0 });
+            using (var bitmap = new System.Drawing.Bitmap(viewer.Width, viewer.Height))
+            {
+                tabs.CreateControl();
+                foreach (System.Windows.Forms.Control child in tabs.TabPages[0].Controls) { var handle = child.Handle; }
+                tabs.DrawToBitmap(bitmap, new System.Drawing.Rectangle(0, 0, tabs.Width, tabs.Height));
+                tabs.TabPages[0].PerformLayout();
+                foreach (System.Windows.Forms.Control child in tabs.TabPages[0].Controls)
+                    child.DrawToBitmap(bitmap, new System.Drawing.Rectangle(
+                        tabs.TabPages[0].Left + child.Left, tabs.TabPages[0].Top + child.Top, child.Width, child.Height));
+                bitmap.Save(Path.Combine(AppContext.BaseDirectory, "log-viewer.png"));
+            }
+            var click = typeof(System.Windows.Forms.Button).GetMethod("OnClick", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            click.Invoke(tabs.TabPages[0].Controls.OfType<System.Windows.Forms.Button>().Single(), new object[] { EventArgs.Empty });
+            Check((string)read.Invoke(null, new object[] { false })! == "", "diagnostic tab button clears diagnostic only");
+            Check(((string)read.Invoke(null, new object[] { true })!).Contains("Barcode completed"), "scanner log survives diagnostic clear");
+            write.Invoke(null, new object[] { false, "keep diagnostic" });
+            click.Invoke(tabs.TabPages[1].Controls.OfType<System.Windows.Forms.Button>().Single(), new object[] { EventArgs.Empty });
+            Check((string)read.Invoke(null, new object[] { true })! == "", "clear scanner log only");
+            Check(((string)read.Invoke(null, new object[] { false })!).Contains("keep diagnostic"), "diagnostic log survives scanner clear");
+            File.Delete(AppRuntime.GetDataPath("scanner_diagnostic.log"));
+            File.WriteAllText(AppRuntime.GetDataPath("scaner_diagnostic.log"), "legacy scanner history");
+            Check(((string)read.Invoke(null, new object[] { true })!).Contains("legacy scanner history"), "legacy scanner log migrated");
+            Check(!File.Exists(AppRuntime.GetDataPath("scaner_diagnostic.log")), "legacy filename retired");
+            var inject = typeof(TextFixer).Assembly.GetType("LayoutFixer.ScannerTextInjector")!.GetMethod("ReplacePreviousText")!;
+            inject.Invoke(null, new object?[] { "", 0, null });
+            string skipped = (string)read.Invoke(null, new object[] { true })!;
+            Check(skipped.Contains("START scanner replacement") && skipped.Contains("END scanner replacement"), "skipped scanner action has START and END");
+        }
+        finally { File.Delete(marker); }
     }
     catch (Exception ex) { nativeFailure = ex; }
 });

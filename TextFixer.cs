@@ -48,7 +48,7 @@ public static class TextFixer
         var elapsed = Stopwatch.StartNew();
 
         string available = string.Join(",", KeyboardLayout.AvailableLanguages.Select(KeyboardLayout.ShortName));
-        Log($"START lastWord={lastWord}, target=0x{targetWindow.ToInt64():X}, focus=0x{focusWindow.ToInt64():X}, currentLayout={(currentLayout?.ToString() ?? "Unsupported")}, available=[{available}]");
+        Log($"========== START lastWord={lastWord}, target=0x{targetWindow.ToInt64():X}, focus=0x{focusWindow.ToInt64():X}, currentLayout={(currentLayout?.ToString() ?? "Unsupported")}, available=[{available}]");
 
         ClipboardSnapshot clipboardSnapshot = CaptureClipboardSnapshot();
         Log($"TIMING clipboard snapshot: {elapsed.ElapsedMilliseconds} ms");
@@ -177,6 +177,7 @@ public static class TextFixer
                 return false;
             }
 
+            Log($"TIMING clipboard publish start: {elapsed.ElapsedMilliseconds} ms");
             if (!SetClipboardTextWithRetry(converted))
             {
                 Log("FAIL: could not write converted text to clipboard");
@@ -184,6 +185,7 @@ public static class TextFixer
             }
 
             Log("Converted text placed into clipboard");
+            Log($"TIMING clipboard publish end: {elapsed.ElapsedMilliseconds} ms");
 
             if (useBackspace && !DeleteLastWord(lastWordTarget!, original, targetWindow))
                 return false;
@@ -241,6 +243,7 @@ public static class TextFixer
         {
             RestoreClipboardSnapshot(clipboardSnapshot);
             Log($"TIMING total: {elapsed.ElapsedMilliseconds} ms");
+            Log("========== END ==========" + Environment.NewLine);
         }
     }
 
@@ -499,23 +502,7 @@ public static class TextFixer
         return null;
     }
 
-    private static bool SetClipboardTextWithRetry(string text)
-    {
-        for (int i = 0; i < 30; i++)
-        {
-            try
-            {
-                Clipboard.SetText(text, TextDataFormat.UnicodeText);
-                return true;
-            }
-            catch (ExternalException)
-            {
-                Thread.Sleep(50);
-            }
-        }
-
-        return false;
-    }
+    private static bool SetClipboardTextWithRetry(string text) => NativeClipboard.TrySetText(text);
 
     private static IntPtr GetFocusedWindow(IntPtr foreground)
     {
@@ -536,21 +523,7 @@ public static class TextFixer
         return s.Length <= 80 ? s : s[..80] + "...";
     }
 
-    private static void Log(string message)
-    {
-        try
-        {
-            string path = AppRuntime.GetDataPath("diagnostic.log");
-            string? dir = Path.GetDirectoryName(path);
-            if (!string.IsNullOrEmpty(dir))
-                Directory.CreateDirectory(dir);
-
-            File.AppendAllText(
-                path,
-                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {message}\r\n");
-        }
-        catch { }
-    }
+    private static void Log(string message) => DiagnosticLogStore.Write(false, message);
 
     private sealed record LastWordTarget(AutomationElement Element, TextPattern Pattern, TextPatternRange End);
 
