@@ -380,7 +380,18 @@ public sealed class ScannerInputService : IDisposable
 
         ScannerDiagnosticLog.Write(
             $"Runtime barcode ready: text='{Sample(text)}', typedLength={typedLength}, suffix={suffix?.ToString() ?? "None"}");
-        _window.Post(() => ScannerTextInjector.ReplacePreviousText(text, typedLength, suffix));
+        IntPtr target = TextFixer.ForegroundWindow;
+        _window.Post(() =>
+        {
+            if (!CorrectionWorker.TryRun(() =>
+            {
+                if (TextFixer.ForegroundWindow == target)
+                    ScannerTextInjector.ReplacePreviousText(text, typedLength, suffix);
+                else
+                    ScannerDiagnosticLog.Write("Scanner correction skipped: focus changed.");
+            }))
+                ScannerDiagnosticLog.Write("Scanner correction skipped: another correction is active.");
+        });
     }
 
     private void ResetRuntimeBuffer()

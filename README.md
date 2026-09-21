@@ -2,6 +2,15 @@
 
 Windows tray utility for correcting text typed in the wrong keyboard layout.
 
+## 1.3.7 — responsive correction
+
+Correction runs on a separate STA worker, keeping the tray UI and low-level
+keyboard hooks responsive during UIA/clipboard waits. Hotkey and scanner
+corrections share a single-operation guard; overlapping requests are skipped.
+Last-word paste confirmation no longer reads the entire document. Clipboard
+polling responds every 10 ms while preserving the previous overall timeout.
+`TIMING` diagnostics report cumulative elapsed milliseconds for each stage.
+
 ## 1.3.6 — Notepad last-word selection
 
 Edit/RichEdit controls now use native Windows text and selection messages before

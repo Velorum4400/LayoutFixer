@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -11,6 +12,7 @@ namespace LayoutFixer;
 
 public static class TextFixer
 {
+    internal static IntPtr ForegroundWindow => GetForegroundWindow();
     private const int VK_CONTROL = 0x11;
     private const int VK_A = 0x41;
     private const int VK_C = 0x43;
@@ -28,7 +30,9 @@ public static class TextFixer
         bool lastWord,
         SelectionPreserver.SelectionSnapshot? selectionSnapshot,
         out KeyboardLanguage from,
-        out KeyboardLanguage to)
+        out KeyboardLanguage to,
+        IntPtr expectedWindow = default,
+        bool captureSelection = false)
     {
         IntPtr targetWindow = GetForegroundWindow();
         IntPtr focusWindow = GetFocusedWindow(targetWindow);
@@ -36,14 +40,29 @@ public static class TextFixer
 
         from = currentLayout ?? KeyboardLanguage.English;
         to = from;
+        if (expectedWindow != IntPtr.Zero && targetWindow != expectedWindow)
+        {
+            Log("FAIL: focus changed before correction started");
+            return false;
+        }
+        var elapsed = Stopwatch.StartNew();
 
         string available = string.Join(",", KeyboardLayout.AvailableLanguages.Select(KeyboardLayout.ShortName));
         Log($"START lastWord={lastWord}, target=0x{targetWindow.ToInt64():X}, focus=0x{focusWindow.ToInt64():X}, currentLayout={(currentLayout?.ToString() ?? "Unsupported")}, available=[{available}]");
 
         ClipboardSnapshot clipboardSnapshot = CaptureClipboardSnapshot();
+        Log($"TIMING clipboard snapshot: {elapsed.ElapsedMilliseconds} ms");
 
         try
         {
+            if (captureSelection)
+                selectionSnapshot ??= SelectionPreserver.CaptureSelection();
+            Log($"TIMING selection snapshot: {elapsed.ElapsedMilliseconds} ms");
+            if (GetForegroundWindow() != targetWindow || GetFocusedWindow(targetWindow) != focusWindow)
+            {
+                Log("FAIL: focus changed while preparing correction");
+                return false;
+            }
             TryClearClipboard();
             Log("Clipboard clear attempted");
 
@@ -73,6 +92,12 @@ public static class TextFixer
                 original = TryGetTextViaAutomation(
                     focusWindow != IntPtr.Zero ? focusWindow : targetWindow,
                     selectionOnly: false);
+            }
+
+            if (GetForegroundWindow() != targetWindow || GetFocusedWindow(targetWindow) != focusWindow)
+            {
+                Log("FAIL: focus changed while reading text");
+                return false;
             }
 
             if (string.IsNullOrEmpty(original))
@@ -107,6 +132,7 @@ public static class TextFixer
             }
 
             Log($"Clipboard text obtained, length={original.Length}, sample={Sample(original)}");
+            Log($"TIMING text acquired: {elapsed.ElapsedMilliseconds} ms");
 
             KeyboardLanguage fallback = currentLayout ?? KeyboardLanguage.English;
             from = LayoutConverter.DetectLanguage(original, fallback);
@@ -143,6 +169,13 @@ public static class TextFixer
             // A UIA range can contain the whole word even when Select() only
             // selects its numeric bidi run. Copy tests the editor's real selection.
             bool useBackspace = lastWordTarget != null && !SelectionCopiesExactly(original);
+            Log($"TIMING selection checked: {elapsed.ElapsedMilliseconds} ms");
+
+            if (GetForegroundWindow() != targetWindow || GetFocusedWindow(targetWindow) != focusWindow)
+            {
+                Log("FAIL: focus changed before replacement");
+                return false;
+            }
 
             if (!SetClipboardTextWithRetry(converted))
             {
@@ -154,6 +187,12 @@ public static class TextFixer
 
             if (useBackspace && !DeleteLastWord(lastWordTarget!, original, targetWindow))
                 return false;
+
+            if (GetForegroundWindow() != targetWindow || GetFocusedWindow(targetWindow) != focusWindow)
+            {
+                Log("FAIL: focus changed before paste");
+                return false;
+            }
 
             if (!Paste())
             {
@@ -201,6 +240,7 @@ public static class TextFixer
         finally
         {
             RestoreClipboardSnapshot(clipboardSnapshot);
+            Log($"TIMING total: {elapsed.ElapsedMilliseconds} ms");
         }
     }
 
@@ -346,15 +386,17 @@ public static class TextFixer
                         }
                     }
 
-                    string documentText = textPattern.DocumentRange.GetText(-1);
-                    string normalizedDoc = documentText.TrimEnd('\r', '\n');
-                    string normalizedConverted = converted.TrimEnd('\r', '\n');
-
-                    if (!partialCorrection &&
-                        string.Equals(normalizedDoc, normalizedConverted, StringComparison.Ordinal))
+                    // Do not retrieve an entire WebView document on each partial
+                    // paste poll; only the selection/caret can confirm this case.
+                    if (!partialCorrection)
                     {
-                        Log($"Paste completion confirmed for full text on attempt {attempt + 1}");
-                        return true;
+                        string documentText = textPattern.DocumentRange.GetText(-1);
+                        if (string.Equals(documentText.TrimEnd('\r', '\n'),
+                            converted.TrimEnd('\r', '\n'), StringComparison.Ordinal))
+                        {
+                            Log($"Paste completion confirmed for full text on attempt {attempt + 1}");
+                            return true;
+                        }
                     }
                 }
             }
@@ -432,7 +474,10 @@ public static class TextFixer
 
     private static string? WaitForClipboardText(uint initialSequence, int attempts, bool allowSameSequence = false)
     {
-        for (int i = 0; i < attempts; i++)
+        // Preserve the old overall timeout for slow targets, but react quickly
+        // when clipboard data arrives instead of sleeping in 75 ms increments.
+        var wait = Stopwatch.StartNew();
+        while (wait.ElapsedMilliseconds < attempts * 75)
         {
             try
             {
@@ -448,7 +493,7 @@ public static class TextFixer
             }
             catch (ExternalException) { }
 
-            Thread.Sleep(75);
+            Thread.Sleep(10);
         }
 
         return null;
@@ -654,6 +699,8 @@ public static class TextFixer
             TextPatternRange wordEnd = wordRange.Clone();
             wordEnd.MoveEndpointByRange(TextPatternRangeEndpoint.Start, wordEnd, TextPatternRangeEndpoint.End);
             target = new LastWordTarget(element, textPattern, wordEnd);
+            if (!element.Equals(AutomationElement.FocusedElement))
+                return null;
             try
             {
                 wordRange.Select();

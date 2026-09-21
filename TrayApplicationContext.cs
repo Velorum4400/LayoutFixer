@@ -13,7 +13,6 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly ScannerInputService _scanner;
     private readonly ScannerTerminatorHook _scannerTerminatorHook;
     private readonly AppSettings _settings;
-    private bool _processing;
     private readonly System.Windows.Forms.Timer _hotkeyTimer;
     private HotkeyAction? _queuedHotkeyAction;
 
@@ -96,7 +95,7 @@ public sealed class TrayApplicationContext : ApplicationContext
 
     private void OnHotkey(HotkeyAction action)
     {
-        if (_processing)
+        if (CorrectionWorker.IsBusy)
             return;
 
         _queuedHotkeyAction = action;
@@ -106,7 +105,7 @@ public sealed class TrayApplicationContext : ApplicationContext
 
     private void ExecuteHotkey(HotkeyAction action)
     {
-        if (_processing)
+        if (CorrectionWorker.IsBusy)
             return;
 
         if (action == HotkeyAction.FullText && _settings.FullTextEnabled)
@@ -118,25 +117,18 @@ public sealed class TrayApplicationContext : ApplicationContext
 
     private void Fix(bool lastWord)
     {
-        _processing = true;
-
-        try
+        bool keepSelection = lastWord && _settings.KeepSelectionAfterCorrection;
+        IntPtr target = TextFixer.ForegroundWindow;
+        CorrectionWorker.TryRun(() =>
         {
-            SelectionPreserver.SelectionSnapshot? selectionSnapshot =
-                lastWord && _settings.KeepSelectionAfterCorrection
-                    ? SelectionPreserver.CaptureSelection()
-                    : null;
-
             TextFixer.TryFix(
                 lastWord,
-                selectionSnapshot,
+                null,
                 out KeyboardLanguage from,
-                out KeyboardLanguage to);
-        }
-        finally
-        {
-            _processing = false;
-        }
+                out KeyboardLanguage to,
+                target,
+                keepSelection);
+        });
     }
 
     private void OpenSettings()

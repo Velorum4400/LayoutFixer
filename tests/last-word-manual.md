@@ -1,8 +1,9 @@
-# Last-word replacement regression checks (1.3.6)
+# Last-word replacement regression checks (1.3.7)
 
 Run `dotnet run --project tests/Regression/Regression.csproj -c Release` for
 conversion, deletion-count safety, portable paths and native Edit/RichEdit
-selection/replacement checks on private Windows controls. These do not test
+selection/replacement checks on private Windows controls, plus STA worker
+dispatch, overlap rejection and recovery after exceptions. These do not test
 the installed Notepad/ChatGPT UI Automation providers or send desktop input.
 
 For live checks, use a disposable draft in ChatGPT Windows, a Chromium
@@ -32,3 +33,9 @@ clipboard value before each test and confirm it is restored afterwards.
 
 For portable builds, diagnostics belong in `data/diagnostic.log` beside the
 executable; installed builds use `%APPDATA%/LayoutFixer/diagnostic.log`.
+
+For 1.3.7, repeat corrections in ChatGPT while checking that the tray menu and
+keyboard remain responsive. Compare the full START-to-TIMING-total interval;
+per-stage TIMING values are cumulative, so their differences locate remaining
+latency. A slow UIA provider may still take time, but must not block the hook
+thread. Rapid repeat hotkeys and scanner corrections must not overlap.

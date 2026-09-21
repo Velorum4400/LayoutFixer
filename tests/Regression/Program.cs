@@ -88,4 +88,29 @@ if (nativeFailure != null)
     Console.Error.WriteLine(nativeFailure);
     Environment.Exit(1);
 }
+var worker = typeof(TextFixer).Assembly.GetType("LayoutFixer.CorrectionWorker")!;
+var run = worker.GetMethod("TryRun")!;
+var busy = worker.GetProperty("IsBusy")!;
+using var entered = new ManualResetEventSlim();
+using var release = new ManualResetEventSlim();
+int callingThread = Environment.CurrentManagedThreadId;
+int correctionThread = callingThread;
+ApartmentState apartment = ApartmentState.Unknown;
+Action blocked = () =>
+{
+    correctionThread = Environment.CurrentManagedThreadId;
+    apartment = Thread.CurrentThread.GetApartmentState();
+    entered.Set();
+    release.Wait(TimeSpan.FromSeconds(5));
+};
+Check((bool)run.Invoke(null, new object[] { blocked })!, "worker accepts correction without waiting for completion");
+Check(entered.Wait(TimeSpan.FromSeconds(2)), "worker started");
+Check(correctionThread != callingThread && apartment == ApartmentState.STA,
+    "correction runs on separate clipboard-compatible STA thread");
+Check(!(bool)run.Invoke(null, new object[] { (Action)(() => { }) })!, "overlapping correction rejected");
+release.Set();
+Check(SpinWait.SpinUntil(() => !(bool)busy.GetValue(null)!, 2000), "guard released after completion");
+Check((bool)run.Invoke(null, new object[] { (Action)(() => throw new InvalidOperationException("test failure")) })!,
+    "worker accepts next correction");
+Check(SpinWait.SpinUntil(() => !(bool)busy.GetValue(null)!, 2000), "guard released after exception");
 Console.WriteLine($"{passed} regression checks passed.");

@@ -42,6 +42,18 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.3.7", Array.Empty<string>(), new[]
+        {
+            T(
+                "Moved text correction to a dedicated STA worker so slow UI Automation and clipboard waits no longer block the tray interface and keyboard hooks. Corrections cannot overlap.",
+                "Исправление текста перенесено в отдельный STA-поток: ожидание UI Automation и буфера обмена больше не блокирует интерфейс и клавиатурные перехватчики. Одновременные исправления исключены.",
+                "תיקון הטקסט הועבר לתהליכון STA נפרד כדי שהמתנה ל-UI Automation וללוח לא תחסום את הממשק ואת וו המקלדת. תיקונים אינם מתבצעים במקביל."),
+            T(
+                "Reduced clipboard polling latency, removed full-document reads during last-word paste confirmation, and added per-stage TIMING diagnostics.",
+                "Уменьшена задержка проверки буфера, убрано чтение всего документа при подтверждении вставки слова, добавлены замеры TIMING по этапам.",
+                "קוצר זמן ההמתנה לבדיקת הלוח, הוסרה קריאת המסמך המלא באימות הדבקת מילה ונוסף אבחון TIMING לכל שלב.")
+        });
+
         AddVersion("v1.3.6", Array.Empty<string>(), new[]
         {
             T(
