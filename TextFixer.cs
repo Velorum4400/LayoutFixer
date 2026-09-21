@@ -15,6 +15,8 @@ public static class TextFixer
     private const int VK_A = 0x41;
     private const int VK_C = 0x43;
     private const int VK_V = 0x56;
+    private const int VK_SHIFT = 0x10;
+    private const int VK_LEFT = 0x25;
 
     private const uint KEYEVENTF_KEYUP = 0x0002;
     private const uint WM_INPUTLANGCHANGEREQUEST = 0x0050;
@@ -63,6 +65,18 @@ public static class TextFixer
 
             if (string.IsNullOrEmpty(original))
             {
+                // Some Chromium/WebView editors (including the ChatGPT Windows app)
+                // expose text through the clipboard but do not expose a usable UIA
+                // caret/range. In last-word mode, create the selection with normal
+                // keyboard input before copying. This makes Ctrl+V replace the word
+                // instead of appending the converted text after it.
+                if (lastWord)
+                {
+                    Log("UIA last-word selection unavailable; trying Ctrl+Shift+Left keyboard fallback");
+                    SelectPreviousWordWithKeyboard();
+                    Thread.Sleep(40);
+                }
+
                 uint seqCopyStart = GetClipboardSequenceNumber();
                 Copy();
                 original = WaitForClipboardText(seqCopyStart, 12);
@@ -462,12 +476,13 @@ public static class TextFixer
     {
         try
         {
-            string dir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "LayoutFixer");
-            Directory.CreateDirectory(dir);
+            string path = AppRuntime.GetDataPath("diagnostic.log");
+            string? dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(dir))
+                Directory.CreateDirectory(dir);
+
             File.AppendAllText(
-                Path.Combine(dir, "diagnostic.log"),
+                path,
                 $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {message}\r\n");
         }
         catch { }
@@ -586,6 +601,20 @@ public static class TextFixer
     }
 
     private static void SelectAll() => SendChord(VK_CONTROL, VK_A);
+
+    private static void SelectPreviousWordWithKeyboard()
+    {
+        SendKeys(new[]
+        {
+            Key(VK_CONTROL, false),
+            Key(VK_SHIFT, false),
+            Key(VK_LEFT, false),
+            Key(VK_LEFT, true),
+            Key(VK_SHIFT, true),
+            Key(VK_CONTROL, true)
+        });
+    }
+
     private static void Copy() => SendChord(VK_CONTROL, VK_C);
     private static bool Paste() => SendChord(VK_CONTROL, VK_V);
 
