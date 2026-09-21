@@ -1,4 +1,4 @@
-# Last-word replacement regression checks (1.3.10)
+# Last-word replacement regression checks (1.3.11)
 
 Run `dotnet run --project tests/Regression/Regression.csproj -c Release` for
 conversion, deletion-count safety, portable paths and native Edit/RichEdit
@@ -57,3 +57,8 @@ For 1.3.10, run RU → HE → EN → RU within 15 seconds on Russian text contai
 `Gamer's Nexus`, `LG` and `Wi-Fi`. The final result must exactly match the
 original text. Then run a separate correction on `Gamer's Nexus` alone and
 confirm it still converts to Russian.
+
+For 1.3.11, attempt a correction in the VS Code Git Bash terminal, then switch
+to a normal text editor and use a hotkey. If terminal UI Automation stalls, the
+log must contain `correction watchdog elapsed after 1500 ms`; the next hotkey
+must work without restarting LayoutFixer.

@@ -385,7 +385,7 @@ public sealed class ScannerInputService : IDisposable
         {
             if (!CorrectionWorker.TryRun(() =>
             {
-                if (TextFixer.ForegroundWindow == target)
+                if (CorrectionWorker.CanContinue && TextFixer.ForegroundWindow == target)
                     ScannerTextInjector.ReplacePreviousText(text, typedLength, suffix);
                 else
                     ScannerDiagnosticLog.Write("Scanner correction skipped: focus changed.");

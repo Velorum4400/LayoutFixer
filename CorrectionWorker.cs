@@ -7,19 +7,35 @@ namespace LayoutFixer;
 // handles SendInput and UIA; otherwise keyboard hooks can stall that process.
 internal static class CorrectionWorker
 {
+    private const int WatchdogTimeoutMs = 1500;
     private static int _busy;
+    private static int _nextOperation;
+    private static int _activeOperation;
+    [ThreadStatic] private static int _operationOnThisThread;
     public static bool IsBusy => Volatile.Read(ref _busy) != 0;
+    public static bool CanContinue =>
+        _operationOnThisThread != 0 &&
+        _operationOnThisThread == Volatile.Read(ref _activeOperation);
 
     public static bool TryRun(Action action)
     {
         if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0) return false;
+        int operation = Interlocked.Increment(ref _nextOperation);
+        Volatile.Write(ref _activeOperation, operation);
         try
         {
             var thread = new Thread(() =>
             {
+                using var watchdog = new System.Threading.Timer(_ => Expire(operation), null, WatchdogTimeoutMs, Timeout.Infinite);
+                _operationOnThisThread = operation;
                 try { action(); }
                 catch (Exception ex) { CrashLogger.WriteException("Correction worker", ex); }
-                finally { Volatile.Write(ref _busy, 0); }
+                finally
+                {
+                    _operationOnThisThread = 0;
+                    if (Interlocked.CompareExchange(ref _activeOperation, 0, operation) == operation)
+                        Volatile.Write(ref _busy, 0);
+                }
             }) { IsBackground = true, Name = "LayoutFixer correction" };
             thread.SetApartmentState(ApartmentState.STA);
             thread.Start();
@@ -27,8 +43,18 @@ internal static class CorrectionWorker
         }
         catch
         {
+            Volatile.Write(ref _activeOperation, 0);
             Volatile.Write(ref _busy, 0);
             throw;
         }
+    }
+
+    private static void Expire(int operation)
+    {
+        if (Interlocked.CompareExchange(ref _activeOperation, 0, operation) != operation)
+            return;
+        Volatile.Write(ref _busy, 0);
+        DiagnosticLogStore.Write(false,
+            "FAIL: correction watchdog elapsed after 1500 ms; operation canceled and hotkeys re-enabled");
     }
 }

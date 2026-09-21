@@ -60,7 +60,7 @@ public static class TextFixer
             if (captureSelection)
                 selectionSnapshot ??= SelectionPreserver.CaptureSelection();
             Log($"TIMING selection snapshot: {elapsed.ElapsedMilliseconds} ms");
-            if (GetForegroundWindow() != targetWindow || GetFocusedWindow(targetWindow) != focusWindow)
+            if (!CorrectionWorker.CanContinue || GetForegroundWindow() != targetWindow || GetFocusedWindow(targetWindow) != focusWindow)
             {
                 Log("FAIL: focus changed while preparing correction");
                 return false;
@@ -93,7 +93,7 @@ public static class TextFixer
                     selectionOnly: false);
             }
 
-            if (GetForegroundWindow() != targetWindow || GetFocusedWindow(targetWindow) != focusWindow)
+            if (!CorrectionWorker.CanContinue || GetForegroundWindow() != targetWindow || GetFocusedWindow(targetWindow) != focusWindow)
             {
                 Log("FAIL: focus changed while reading text");
                 return false;
@@ -175,7 +175,7 @@ public static class TextFixer
             {
                 if (!DeleteLastWord(lastWordTarget, original, targetWindow))
                     return false;
-                if (GetForegroundWindow() != targetWindow || GetFocusedWindow(targetWindow) != focusWindow)
+                if (!CorrectionWorker.CanContinue || GetForegroundWindow() != targetWindow || GetFocusedWindow(targetWindow) != focusWindow)
                 {
                     Log("FAIL: focus changed before direct Unicode replacement");
                     return false;
@@ -189,7 +189,7 @@ public static class TextFixer
                 return true;
             }
 
-            if (GetForegroundWindow() != targetWindow || GetFocusedWindow(targetWindow) != focusWindow)
+            if (!CorrectionWorker.CanContinue || GetForegroundWindow() != targetWindow || GetFocusedWindow(targetWindow) != focusWindow)
             {
                 Log("FAIL: focus changed before replacement");
                 return false;
@@ -206,7 +206,7 @@ public static class TextFixer
             Log("Converted text placed into clipboard");
             Log($"TIMING clipboard publish end: {elapsed.ElapsedMilliseconds} ms");
 
-            if (GetForegroundWindow() != targetWindow || GetFocusedWindow(targetWindow) != focusWindow)
+            if (!CorrectionWorker.CanContinue || GetForegroundWindow() != targetWindow || GetFocusedWindow(targetWindow) != focusWindow)
             {
                 Log("FAIL: focus changed before paste");
                 return false;
@@ -576,7 +576,7 @@ public static class TextFixer
             return false;
         }
 
-        if (GetForegroundWindow() != foreground ||
+        if (!CorrectionWorker.CanContinue || GetForegroundWindow() != foreground ||
             !target.Element.Equals(AutomationElement.FocusedElement))
         {
             Log("FAIL: focus changed before last-word backspace fallback");
@@ -590,7 +590,7 @@ public static class TextFixer
         for (int attempt = 0; attempt < 10; attempt++)
         {
             Thread.Sleep(10);
-            if (GetForegroundWindow() != foreground ||
+            if (!CorrectionWorker.CanContinue || GetForegroundWindow() != foreground ||
                 !target.Element.Equals(AutomationElement.FocusedElement))
                 break;
 

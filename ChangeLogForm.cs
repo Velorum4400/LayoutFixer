@@ -42,6 +42,14 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.3.11", Array.Empty<string>(), new[]
+        {
+            T(
+                "Added a 1.5-second correction watchdog. A UI Automation call that stalls in a terminal or other unsupported editor is canceled, logged, and no longer leaves future hotkeys blocked until the app restarts.",
+                "Добавлен watchdog исправления на 1,5 секунды. Зависший вызов UI Automation в терминале или другом неподдерживаемом редакторе отменяется, записывается в лог и больше не блокирует следующие хоткеи до перезапуска программы.",
+                "נוסף watchdog לתיקון של 1.5 שניות. קריאת UI Automation שנתקעת במסוף או בעורך לא נתמך מבוטלת, נרשמת ביומן ואינה חוסמת עוד מקשי קיצור עד להפעלה מחדש של התוכנית.")
+        });
+
         AddVersion("v1.3.10", Array.Empty<string>(), new[]
         {
             T(

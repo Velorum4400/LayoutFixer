@@ -2,6 +2,12 @@
 
 Windows tray utility for correcting text typed in the wrong keyboard layout.
 
+## 1.3.11 — recovery from unsupported editors
+
+Each correction has a 1.5-second watchdog. If an editor's UI Automation call
+stalls, the current operation is canceled and future hotkeys are re-enabled
+without restarting LayoutFixer. The diagnostic log records the watchdog event.
+
 ## 1.3.10 — mixed-language correction cycles
 
 Successive corrections within 15 seconds retain the original logical text when
