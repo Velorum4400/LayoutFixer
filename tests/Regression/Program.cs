@@ -38,4 +38,54 @@ try
 }
 finally { File.Delete(marker); }
 
+Exception? nativeFailure = null;
+var nativeThread = new Thread(() =>
+{
+    try
+    {
+        var select = typeof(TextFixer).Assembly.GetType("LayoutFixer.NativeEditSelection")!
+            .GetMethod("TrySelect")!;
+        foreach (System.Windows.Forms.TextBoxBase editor in new System.Windows.Forms.TextBoxBase[]
+            { new System.Windows.Forms.TextBox { Multiline = true }, new System.Windows.Forms.RichTextBox() })
+        using (editor)
+        {
+            editor.RightToLeft = System.Windows.Forms.RightToLeft.Yes;
+            foreach (string prefix in new[] { "prefix ", "line one\r\n", new string('x', 70000) + " " })
+            {
+                editor.Text = prefix + "הקךםרוצ4400  suffix";
+                int wordStart = editor.Text.IndexOf("הקךםרוצ4400", StringComparison.Ordinal);
+                editor.Select(wordStart + 13, 0);
+                object?[] args = { editor.Handle, null, null };
+                Check((bool)select.Invoke(null, args)! && (string?)args[1] == "הקךםרוצ4400",
+                    editor.GetType().Name + " RTL word after prefix length " + prefix.Length);
+                editor.SelectedText = "velorum4400";
+                Check(editor.Text.EndsWith("velorum4400  suffix", StringComparison.Ordinal),
+                    "replacement preserves suffix and spaces");
+                Check(editor.Text[..wordStart] == prefix.Replace("\r\n", "\n") || editor.Text[..wordStart] == prefix,
+                    "replacement preserves prefix");
+            }
+            editor.Text = "first second";
+            editor.Select(1, 3);
+            object?[] selectedArgs = { editor.Handle, null, null };
+            Check((bool)select.Invoke(null, selectedArgs)! && (string?)selectedArgs[1] == "irs",
+                "existing selection preserved");
+            editor.Select(0, 0);
+            object?[] emptyArgs = { editor.Handle, null, null };
+            Check((bool)select.Invoke(null, emptyArgs)! && emptyArgs[1] == null && editor.SelectionLength == 0,
+                "no selection at document start");
+        }
+        using var button = new System.Windows.Forms.Button();
+        object?[] unsupported = { button.Handle, null, null };
+        Check(!(bool)select.Invoke(null, unsupported)!, "non-edit controls retain UIA fallback");
+    }
+    catch (Exception ex) { nativeFailure = ex; }
+});
+nativeThread.SetApartmentState(ApartmentState.STA);
+nativeThread.Start();
+nativeThread.Join();
+if (nativeFailure != null)
+{
+    Console.Error.WriteLine(nativeFailure);
+    Environment.Exit(1);
+}
 Console.WriteLine($"{passed} regression checks passed.");

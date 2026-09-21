@@ -1,8 +1,9 @@
-# Last-word replacement regression checks (1.3.5)
+# Last-word replacement regression checks (1.3.6)
 
 Run `dotnet run --project tests/Regression/Regression.csproj -c Release` for
-conversion, deletion-count safety and portable-path checks. These do not test
-real UI Automation providers or send desktop input.
+conversion, deletion-count safety, portable paths and native Edit/RichEdit
+selection/replacement checks on private Windows controls. These do not test
+the installed Notepad/ChatGPT UI Automation providers or send desktop input.
 
 For live checks, use a disposable draft in ChatGPT Windows, a Chromium
 contenteditable editor and Notepad. Install EN/RU/HE layouts. Preserve a known
@@ -15,7 +16,8 @@ clipboard value before each test and confirm it is restored afterwards.
 2. Repeat after an unrelated prefix, in the middle of a document with a suffix,
    and with trailing spaces. The prefix, suffix and spaces must survive.
 3. Repeat with plain Hebrew, Russian and English words, including punctuation.
-   When selection copies the entire word, expect
+   In Notepad Edit/RichEdit, expect `Native last-word: class=...,
+   selection confirmed, length=...`. For UIA editors, when selection copies the entire word, expect
    `Last-word selection confirmed through clipboard` and no backspace log.
 4. Select a portion of text manually before Insert. Only the selection should
    be converted; the new last-word backspace fallback must not run.

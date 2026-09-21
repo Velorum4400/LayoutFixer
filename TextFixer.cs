@@ -52,9 +52,18 @@ public static class TextFixer
 
             if (lastWord)
             {
-                original = TryGetSelectionOrSelectLastWordViaAutomation(
-                    focusWindow != IntPtr.Zero ? focusWindow : targetWindow,
-                    out lastWordTarget);
+                bool nativeHandled = NativeEditSelection.TrySelect(
+                    focusWindow, out original, out string nativeDiagnostic);
+                Log(nativeDiagnostic);
+                if (nativeHandled && string.IsNullOrEmpty(original))
+                {
+                    Log("FAIL: native editor has no confirmed word selection");
+                    return false;
+                }
+                if (!nativeHandled)
+                    original = TryGetSelectionOrSelectLastWordViaAutomation(
+                        focusWindow != IntPtr.Zero ? focusWindow : targetWindow,
+                        out lastWordTarget);
             }
             else
             {

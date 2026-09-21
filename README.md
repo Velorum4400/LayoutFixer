@@ -2,6 +2,14 @@
 
 Windows tray utility for correcting text typed in the wrong keyboard layout.
 
+## 1.3.6 — Notepad last-word selection
+
+Edit/RichEdit controls now use native Windows text and selection messages before
+trying UI Automation. Logical selection offsets avoid RTL arrow-key ambiguity,
+preserve surrounding whitespace, and support selections beyond 65,535 characters.
+The diagnostic log includes the focused window class and native selection result.
+Chromium/WebView continues to use the verified UIA/backspace path introduced below.
+
 ## 1.3.5 — last-word replacement
 
 Automatically selected words are checked through the clipboard before replacement.

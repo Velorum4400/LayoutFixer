@@ -42,6 +42,14 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.3.6", Array.Empty<string>(), new[]
+        {
+            T(
+                "Fixed last-word selection in Edit/RichEdit controls used by Notepad: read text and confirm logical selection offsets with native Windows messages, without relying on UIA or RTL keyboard navigation.",
+                "Исправлено выделение последнего слова в полях Edit/RichEdit Блокнота: чтение текста и проверка логических границ выделения выполняются сообщениями Windows, без зависимости от UIA и клавиатурной навигации RTL.",
+                "תוקנה בחירת המילה האחרונה בפקדי Edit/RichEdit של פנקס הרשימות: קריאת הטקסט ואימות גבולות הבחירה הלוגיים נעשים באמצעות הודעות Windows, ללא תלות ב-UIA או בניווט מקלדת RTL.")
+        });
+
         AddVersion("v1.3.5", Array.Empty<string>(), new[]
         {
             T(
