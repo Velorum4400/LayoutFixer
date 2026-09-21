@@ -2,6 +2,19 @@
 
 Windows tray utility for correcting text typed in the wrong keyboard layout.
 
+## 1.3.5 — last-word replacement
+
+Automatically selected words are checked through the clipboard before replacement.
+If the editor selected only part of the word (for example, the digits in a Hebrew
+word in ChatGPT Windows/Chromium), LayoutFixer restores and verifies a collapsed
+caret at the logical word end, sends exactly `original.Length` Backspace presses,
+then pastes the converted text. Confirmed selections keep the normal paste path.
+The fallback logs `Last-word replacement using backspace fallback, length=...`.
+It aborts if focus/caret cannot be verified or character counts would be unsafe.
+
+Portable logs are stored in `data` next to the executable; installed logs remain
+in `%APPDATA%\LayoutFixer`. See [regression checks](tests/last-word-manual.md).
+
 Default hotkeys:
 - Ctrl+Shift — correct all text in the current field
 - Ctrl+Alt — correct the last word

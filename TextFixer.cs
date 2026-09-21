@@ -17,6 +17,7 @@ public static class TextFixer
     private const int VK_V = 0x56;
     private const int VK_SHIFT = 0x10;
     private const int VK_LEFT = 0x25;
+    private const int VK_BACK = 0x08;
 
     private const uint KEYEVENTF_KEYUP = 0x0002;
     private const uint WM_INPUTLANGCHANGEREQUEST = 0x0050;
@@ -47,11 +48,13 @@ public static class TextFixer
             Log("Clipboard clear attempted");
 
             string? original;
+            LastWordTarget? lastWordTarget = null;
 
             if (lastWord)
             {
                 original = TryGetSelectionOrSelectLastWordViaAutomation(
-                    focusWindow != IntPtr.Zero ? focusWindow : targetWindow);
+                    focusWindow != IntPtr.Zero ? focusWindow : targetWindow,
+                    out lastWordTarget);
             }
             else
             {
@@ -128,6 +131,10 @@ public static class TextFixer
 
             Log($"Converted sample={Sample(converted)}");
 
+            // A UIA range can contain the whole word even when Select() only
+            // selects its numeric bidi run. Copy tests the editor's real selection.
+            bool useBackspace = lastWordTarget != null && !SelectionCopiesExactly(original);
+
             if (!SetClipboardTextWithRetry(converted))
             {
                 Log("FAIL: could not write converted text to clipboard");
@@ -135,6 +142,9 @@ public static class TextFixer
             }
 
             Log("Converted text placed into clipboard");
+
+            if (useBackspace && !DeleteLastWord(lastWordTarget!, original, targetWindow))
+                return false;
 
             if (!Paste())
             {
@@ -488,8 +498,88 @@ public static class TextFixer
         catch { }
     }
 
-    private static string? TryGetSelectionOrSelectLastWordViaAutomation(IntPtr hwnd)
+    private sealed record LastWordTarget(AutomationElement Element, TextPattern Pattern, TextPatternRange End);
+
+    private static bool SelectionCopiesExactly(string expected)
     {
+        TryClearClipboard();
+        uint sequence = GetClipboardSequenceNumber();
+        Copy();
+        string? copied = WaitForClipboardText(sequence, 4);
+        bool confirmed = string.Equals(copied, expected, StringComparison.Ordinal);
+        Log(confirmed
+            ? "Last-word selection confirmed through clipboard"
+            : $"Last-word selection unreliable, copiedLength={copied?.Length ?? 0}, expectedLength={expected.Length}");
+        return confirmed;
+    }
+
+    private static bool CanBackspaceByLength(string text)
+    {
+        // Backspace counts editing units, not UTF-16 units. Limit this fallback
+        // to the plain characters used by the supported keyboard layouts.
+        // Emoji, combining marks and bidi controls must not delete adjacent text.
+        return text.Length > 0 && text.All(c =>
+            (c >= '\u0021' && c <= '\u007e') ||
+            (c >= '\u0410' && c <= '\u044f') || c == 'Ё' || c == 'ё' ||
+            (c >= '\u05d0' && c <= '\u05ea') || c == '№');
+    }
+
+    private static bool DeleteLastWord(LastWordTarget target, string original, IntPtr foreground)
+    {
+        if (!CanBackspaceByLength(original))
+        {
+            Log("FAIL: last-word backspace fallback cannot safely count this text");
+            return false;
+        }
+
+        if (GetForegroundWindow() != foreground ||
+            !target.Element.Equals(AutomationElement.FocusedElement))
+        {
+            Log("FAIL: focus changed before last-word backspace fallback");
+            return false;
+        }
+
+        // Collapse at the saved LOGICAL end of the word, not with Left/Right:
+        // visual arrows are ambiguous for Hebrew + digits. Trailing whitespace
+        // and text after the original caret remain outside the deletion.
+        target.End.Select();
+        for (int attempt = 0; attempt < 10; attempt++)
+        {
+            Thread.Sleep(10);
+            if (GetForegroundWindow() != foreground ||
+                !target.Element.Equals(AutomationElement.FocusedElement))
+                break;
+
+            TextPatternRange[] selections = target.Pattern.GetSelection();
+            if (selections.Length != 1)
+                continue;
+
+            TextPatternRange caret = selections[0];
+            if (caret.CompareEndpoints(TextPatternRangeEndpoint.Start, caret, TextPatternRangeEndpoint.End) != 0 ||
+                caret.CompareEndpoints(TextPatternRangeEndpoint.Start, target.End, TextPatternRangeEndpoint.Start) != 0 ||
+                !TextBeforeCaretEquals(caret, original))
+                continue;
+
+            var inputs = new INPUT[checked(original.Length * 2)];
+            for (int i = 0; i < original.Length; i++)
+            {
+                inputs[i * 2] = Key(VK_BACK, false);
+                inputs[i * 2 + 1] = Key(VK_BACK, true);
+            }
+
+            Log($"Last-word replacement using backspace fallback, length={original.Length}");
+            SendKeys(inputs);
+            Thread.Sleep(90);
+            return true;
+        }
+
+        Log("FAIL: could not confirm collapsed caret and original text before backspace fallback");
+        return false;
+    }
+
+    private static string? TryGetSelectionOrSelectLastWordViaAutomation(IntPtr hwnd, out LastWordTarget? target)
+    {
+        target = null;
         try
         {
             AutomationElement element = AutomationElement.FocusedElement
@@ -540,16 +630,30 @@ public static class TextFixer
             wordRange.MoveEndpointByRange(TextPatternRangeEndpoint.End, wordRange, TextPatternRangeEndpoint.Start);
 
             if (trailingWhitespace > 0)
-                wordRange.Move(TextUnit.Character, -trailingWhitespace);
+            {
+                if (wordRange.Move(TextUnit.Character, -trailingWhitespace) != -trailingWhitespace)
+                    return null;
+            }
 
-            if (wordRange.MoveEndpointByUnit(TextPatternRangeEndpoint.Start, TextUnit.Character, -wordLength) == 0)
+            if (wordRange.MoveEndpointByUnit(TextPatternRangeEndpoint.Start, TextUnit.Character, -wordLength) != -wordLength)
                 return null;
 
             string lastWordText = wordRange.GetText(-1);
-            if (string.IsNullOrEmpty(lastWordText))
+            if (!string.Equals(lastWordText, beforeCaret.Substring(start, wordLength), StringComparison.Ordinal))
                 return null;
 
-            wordRange.Select();
+            TextPatternRange wordEnd = wordRange.Clone();
+            wordEnd.MoveEndpointByRange(TextPatternRangeEndpoint.Start, wordEnd, TextPatternRangeEndpoint.End);
+            target = new LastWordTarget(element, textPattern, wordEnd);
+            try
+            {
+                wordRange.Select();
+            }
+            catch (Exception ex)
+            {
+                // Preserve the known word and its end even when Select fails.
+                Log("UIA word selection failed: " + ex.GetType().Name + ": " + ex.Message);
+            }
             return lastWordText;
         }
         catch (Exception ex)

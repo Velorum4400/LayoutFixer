@@ -42,6 +42,18 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.3.5", Array.Empty<string>(), new[]
+        {
+            T(
+                "Last-word correction now verifies the actual selection through the clipboard. If selection is unreliable (including Hebrew with digits in ChatGPT/Chromium), it confirms the word-end caret and removes the original word with Backspace before pasting.",
+                "Исправление последнего слова теперь проверяет фактическое выделение через буфер обмена. При ненадёжном выделении (включая иврит с цифрами в ChatGPT/Chromium) проверяется курсор в конце слова, затем исходное слово удаляется Backspace перед вставкой.",
+                "תיקון המילה האחרונה מאמת כעת את הבחירה בפועל דרך הלוח. כשהבחירה אינה אמינה (כולל עברית עם ספרות ב-ChatGPT/Chromium), מיקום הסמן בסוף המילה מאומת והמילה המקורית נמחקת באמצעות Backspace לפני ההדבקה."),
+            T(
+                "Added backspace fallback diagnostics and guards against changed focus, unconfirmed caret positions and unsafe character counts. Confirmed selections retain the normal paste path.",
+                "Добавлены диагностика fallback и защита при смене фокуса, неподтверждённом положении курсора и небезопасном подсчёте символов. Подтверждённое выделение использует обычную вставку.",
+                "נוספו אבחון ל-fallback והגנות מפני שינוי מיקוד, מיקום סמן לא מאומת וספירת תווים לא בטוחה. בחירה מאומתת ממשיכה להשתמש בהדבקה הרגילה.")
+        });
+
         AddVersion("v1.3.4", Array.Empty<string>(), new[]
         {
             T(

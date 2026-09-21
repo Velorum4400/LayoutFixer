@@ -63,6 +63,7 @@ LayoutFixer Portable $version
 Run LayoutFixer.exe directly. No installation is required.
 
 Portable settings are stored in the data folder next to LayoutFixer.exe.
+Diagnostic logs (diagnostic.log and scaner_diagnostic.log) are stored there too.
 The Start with Windows option is supported. It creates a separate
 LayoutFixerPortable startup entry and does not overwrite the installed
 LayoutFixer startup entry.
