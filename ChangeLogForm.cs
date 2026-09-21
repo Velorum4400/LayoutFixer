@@ -42,6 +42,14 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.3.12", Array.Empty<string>(), new[]
+        {
+            T(
+                "Removed the unused legacy SettingsForm and obsolete selection-copy code. Clipboard snapshots are now captured only for correction paths that actually use the clipboard.",
+                "Удалены неиспользуемая устаревшая форма SettingsForm и устаревший код копирования выделения. Снимок буфера теперь создаётся только в путях исправления, которые действительно используют буфер.",
+                "הוסרו טופס SettingsForm הישן שאינו בשימוש וקוד העתקת בחירה מיושן. תמונת מצב של הלוח נוצרת כעת רק במסלולי תיקון שבאמת משתמשים בלוח.")
+        });
+
         AddVersion("v1.3.11", Array.Empty<string>(), new[]
         {
             T(

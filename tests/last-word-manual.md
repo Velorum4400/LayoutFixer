@@ -1,4 +1,4 @@
-# Last-word replacement regression checks (1.3.11)
+# Last-word replacement regression checks (1.3.12)
 
 Run `dotnet run --project tests/Regression/Regression.csproj -c Release` for
 conversion, deletion-count safety, portable paths and native Edit/RichEdit
@@ -62,3 +62,7 @@ For 1.3.11, attempt a correction in the VS Code Git Bash terminal, then switch
 to a normal text editor and use a hotkey. If terminal UI Automation stalls, the
 log must contain `correction watchdog elapsed after 1500 ms`; the next hotkey
 must work without restarting LayoutFixer.
+
+For 1.3.12, confirm ordinary full-text, last-word, scanner and Open log flows
+remain available after cleanup. Clipboard snapshots should be logged only when
+a correction actually falls back to clipboard input or publication.

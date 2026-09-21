@@ -37,6 +37,8 @@ Check(LayoutConverter.Convert("Gamer's Nexus", KeyboardLanguage.English, Keyboar
     "ordinary standalone English conversion remains available");
 Check(typeof(TextFixer).GetMethod("SendUnicodeText", BindingFlags.NonPublic | BindingFlags.Static) != null,
     "direct Unicode replacement is available without clipboard publication");
+Check(typeof(TextFixer).Assembly.GetType("LayoutFixer.SettingsForm") == null,
+    "unused legacy settings form is removed");
 
 string marker = Path.Combine(AppContext.BaseDirectory, AppRuntime.PortableMarkerFileName);
 File.WriteAllText(marker, "regression test");

@@ -2,6 +2,13 @@
 
 Windows tray utility for correcting text typed in the wrong keyboard layout.
 
+## 1.3.12 — maintenance cleanup
+
+Removed the unused legacy settings screen and obsolete clipboard selection
+verification. Clipboard snapshots are now taken only when a correction needs
+clipboard access, avoiding unnecessary data-format cloning in direct Unicode
+replacement paths.
+
 ## 1.3.11 — recovery from unsupported editors
 
 Each correction has a 1.5-second watchdog. If an editor's UI Automation call

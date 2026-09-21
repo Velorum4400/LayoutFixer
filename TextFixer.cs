@@ -51,9 +51,17 @@ public static class TextFixer
         string available = string.Join(",", KeyboardLayout.AvailableLanguages.Select(KeyboardLayout.ShortName));
         Log($"========== START lastWord={lastWord}, target=0x{targetWindow.ToInt64():X}, focus=0x{focusWindow.ToInt64():X}, currentLayout={(currentLayout?.ToString() ?? "Unsupported")}, available=[{available}]");
 
-        ClipboardSnapshot clipboardSnapshot = CaptureClipboardSnapshot();
+        ClipboardSnapshot? clipboardSnapshot = null;
         bool clipboardChanged = false;
-        Log($"TIMING clipboard snapshot: {elapsed.ElapsedMilliseconds} ms");
+
+        void EnsureClipboardSnapshot()
+        {
+            if (clipboardSnapshot != null)
+                return;
+
+            clipboardSnapshot = CaptureClipboardSnapshot();
+            Log($"TIMING clipboard snapshot: {elapsed.ElapsedMilliseconds} ms");
+        }
 
         try
         {
@@ -88,9 +96,7 @@ public static class TextFixer
                 SelectAll();
                 Log("Ctrl+A sent");
                 Thread.Sleep(180);
-                original = TryGetTextViaAutomation(
-                    focusWindow != IntPtr.Zero ? focusWindow : targetWindow,
-                    selectionOnly: false);
+                original = TryGetTextViaAutomation(focusWindow != IntPtr.Zero ? focusWindow : targetWindow);
             }
 
             if (!CorrectionWorker.CanContinue || GetForegroundWindow() != targetWindow || GetFocusedWindow(targetWindow) != focusWindow)
@@ -108,6 +114,7 @@ public static class TextFixer
                 // instead of appending the converted text after it.
                 if (lastWord)
                 {
+                    EnsureClipboardSnapshot();
                     TryClearClipboard();
                     clipboardChanged = true;
                     Log("Clipboard clear attempted for keyboard fallback");
@@ -116,6 +123,7 @@ public static class TextFixer
                     Thread.Sleep(40);
                 }
 
+                EnsureClipboardSnapshot();
                 uint seqCopyStart = GetClipboardSequenceNumber();
                 Copy();
                 original = WaitForClipboardText(seqCopyStart, 12);
@@ -196,6 +204,7 @@ public static class TextFixer
             }
 
             Log($"TIMING clipboard publish start: {elapsed.ElapsedMilliseconds} ms");
+            EnsureClipboardSnapshot();
             if (!SetClipboardTextWithRetry(converted))
             {
                 Log("FAIL: could not write converted text to clipboard");
@@ -257,7 +266,7 @@ public static class TextFixer
         }
         finally
         {
-            if (clipboardChanged)
+            if (clipboardChanged && clipboardSnapshot != null)
                 RestoreClipboardSnapshot(clipboardSnapshot);
             Log($"TIMING total: {elapsed.ElapsedMilliseconds} ms");
             Log("========== END ==========" + Environment.NewLine);
@@ -544,19 +553,6 @@ public static class TextFixer
 
     private sealed record LastWordTarget(AutomationElement Element, TextPattern Pattern, TextPatternRange End);
 
-    private static bool SelectionCopiesExactly(string expected)
-    {
-        TryClearClipboard();
-        uint sequence = GetClipboardSequenceNumber();
-        Copy();
-        string? copied = WaitForClipboardText(sequence, 4);
-        bool confirmed = string.Equals(copied, expected, StringComparison.Ordinal);
-        Log(confirmed
-            ? "Last-word selection confirmed through clipboard"
-            : $"Last-word selection unreliable, copiedLength={copied?.Length ?? 0}, expectedLength={expected.Length}");
-        return confirmed;
-    }
-
     private static bool CanBackspaceByLength(string text)
     {
         // Backspace counts editing units, not UTF-16 units. Limit this fallback
@@ -709,7 +705,7 @@ public static class TextFixer
         }
     }
 
-    private static string? TryGetTextViaAutomation(IntPtr hwnd, bool selectionOnly)
+    private static string? TryGetTextViaAutomation(IntPtr hwnd)
     {
         try
         {
@@ -730,12 +726,9 @@ public static class TextFixer
                         return selected;
                 }
 
-                if (selectionOnly)
-                    return null;
             }
 
-            if (!selectionOnly &&
-                element.TryGetCurrentPattern(ValuePattern.Pattern, out object? valuePatternObj))
+            if (element.TryGetCurrentPattern(ValuePattern.Pattern, out object? valuePatternObj))
             {
                 string value = ((ValuePattern)valuePatternObj).Current.Value;
                 if (!string.IsNullOrEmpty(value))
