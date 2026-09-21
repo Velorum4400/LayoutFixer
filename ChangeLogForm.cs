@@ -42,6 +42,26 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.3.4", Array.Empty<string>(), new[]
+        {
+            T(
+                "Improved last-word correction in Chromium/WebView editors such as the ChatGPT Windows app by using Ctrl+Shift+Left when UI Automation cannot create the word selection.",
+                "Улучшено исправление последнего слова в Chromium/WebView-редакторах, включая приложение ChatGPT для Windows: если UI Automation не может выделить слово, используется Ctrl+Shift+Left.",
+                "שופר תיקון המילה האחרונה בעורכי Chromium/WebView, כולל אפליקציית ChatGPT ל-Windows: כאשר UI Automation אינו יכול לבחור את המילה, נעשה שימוש ב-Ctrl+Shift+Left."),
+            T(
+                "Portable diagnostic.log now uses the portable data directory instead of %APPDATA%.",
+                "В portable-версии diagnostic.log теперь записывается в portable-папку data вместо %APPDATA%.",
+                "בגרסה הניידת diagnostic.log נכתב כעת לתיקיית data הניידת במקום %APPDATA%.")
+        });
+
+        AddVersion("v1.3.3", Array.Empty<string>(), new[]
+        {
+            T(
+                "Added a RemoteApp-friendly scanner fallback that removes the original scanner text with Backspace before pasting the corrected barcode.",
+                "Добавлен совместимый с RemoteApp fallback для сканера: исходный текст сканера удаляется Backspace перед вставкой исправленного штрихкода.",
+                "נוסף fallback לסורק התואם ל-RemoteApp: טקסט הסורק המקורי נמחק באמצעות Backspace לפני הדבקת הברקוד המתוקן.")
+        });
+
         AddVersion("v1.3.2", Array.Empty<string>(), new[]
         {
             T(
