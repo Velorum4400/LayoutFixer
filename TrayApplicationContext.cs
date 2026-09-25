@@ -119,6 +119,9 @@ public sealed class TrayApplicationContext : ApplicationContext
     {
         bool keepSelection = lastWord && _settings.KeepSelectionAfterCorrection;
         IntPtr target = TextFixer.ForegroundWindow;
+        string? typedLastWord = lastWord && _hook.TryGetLastTypedWord(target, out string word)
+            ? word
+            : null;
         CorrectionWorker.TryRun(() =>
         {
             TextFixer.TryFix(
@@ -127,7 +130,8 @@ public sealed class TrayApplicationContext : ApplicationContext
                 out KeyboardLanguage from,
                 out KeyboardLanguage to,
                 target,
-                keepSelection);
+                keepSelection,
+                typedLastWord);
         });
     }
 

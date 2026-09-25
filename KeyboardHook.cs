@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows.Forms;
 
 namespace LayoutFixer;
@@ -26,6 +27,11 @@ public sealed class KeyboardHook : IDisposable
 
     private readonly HashSet<Keys> _pressed = new();
     private readonly HashSet<Keys> _suppressedKeys = new();
+    private readonly object _typedWordLock = new();
+
+    private string _typedWord = string.Empty;
+    private IntPtr _typedWordWindow;
+    private DateTime _typedWordAtUtc;
 
     private HotkeyAction? _pendingAction;
     private HashSet<Keys>? _pendingKeys;
@@ -73,6 +79,23 @@ public sealed class KeyboardHook : IDisposable
         if (_hook == IntPtr.Zero)
             throw new System.ComponentModel.Win32Exception(
                 Marshal.GetLastWin32Error());
+    }
+
+    public bool TryGetLastTypedWord(IntPtr window, out string word)
+    {
+        lock (_typedWordLock)
+        {
+            if (window == IntPtr.Zero || window != _typedWordWindow ||
+                string.IsNullOrEmpty(_typedWord) ||
+                DateTime.UtcNow - _typedWordAtUtc > TimeSpan.FromSeconds(10))
+            {
+                word = string.Empty;
+                return false;
+            }
+
+            word = _typedWord;
+            return true;
+        }
     }
 
     private IntPtr HookCallback(
@@ -145,6 +168,9 @@ public sealed class KeyboardHook : IDisposable
                 }
             }
 
+            if (firstDown)
+                TrackTypedKey(key, data);
+
             // Suppress auto-repeat of the key that completed
             // a recognized hotkey.
             if (_suppressedKeys.Contains(key))
@@ -169,6 +195,85 @@ public sealed class KeyboardHook : IDisposable
             nCode,
             wParam,
             lParam);
+    }
+
+    private void TrackTypedKey(Keys key, KBDLLHOOKSTRUCT data)
+    {
+        if (IsCaretChangingKey(key) || HasCommandModifier())
+        {
+            ClearTypedWord();
+            return;
+        }
+
+        if (key == Keys.Back)
+        {
+            lock (_typedWordLock)
+            {
+                if (_typedWord.Length > 0)
+                    _typedWord = _typedWord[..^1];
+                _typedWordAtUtc = DateTime.UtcNow;
+            }
+            return;
+        }
+
+        string typed = GetTypedText(data);
+        if (string.IsNullOrEmpty(typed))
+            return;
+
+        IntPtr window = GetForegroundWindow();
+        if (window == IntPtr.Zero)
+            return;
+
+        lock (_typedWordLock)
+        {
+            if (window != _typedWordWindow ||
+                DateTime.UtcNow - _typedWordAtUtc > TimeSpan.FromSeconds(10))
+                _typedWord = string.Empty;
+
+            _typedWordWindow = window;
+            foreach (char c in typed)
+            {
+                if (char.IsWhiteSpace(c))
+                    _typedWord = string.Empty;
+                else
+                    _typedWord += c;
+            }
+            _typedWordAtUtc = DateTime.UtcNow;
+        }
+    }
+
+    private static bool IsCaretChangingKey(Keys key) => key is
+        Keys.Left or Keys.Right or Keys.Up or Keys.Down or Keys.Home or Keys.End or
+        Keys.PageUp or Keys.PageDown or Keys.Delete or Keys.Return or Keys.Tab or Keys.Escape;
+
+    private bool HasCommandModifier() =>
+        _pressed.Contains(Keys.ControlKey) || _pressed.Contains(Keys.LControlKey) ||
+        _pressed.Contains(Keys.RControlKey) || _pressed.Contains(Keys.Menu) ||
+        _pressed.Contains(Keys.LMenu) || _pressed.Contains(Keys.RMenu) ||
+        _pressed.Contains(Keys.LWin) || _pressed.Contains(Keys.RWin);
+
+    private static string GetTypedText(KBDLLHOOKSTRUCT data)
+    {
+        var keyboardState = new byte[256];
+        if (!GetKeyboardState(keyboardState))
+            return string.Empty;
+
+        IntPtr foreground = GetForegroundWindow();
+        uint threadId = foreground == IntPtr.Zero ? 0 : GetWindowThreadProcessId(foreground, IntPtr.Zero);
+        var buffer = new StringBuilder(8);
+        int count = ToUnicodeEx(data.vkCode, data.scanCode, keyboardState, buffer, buffer.Capacity, 0,
+            GetKeyboardLayout(threadId));
+        return count > 0 ? buffer.ToString(0, count) : string.Empty;
+    }
+
+    private void ClearTypedWord()
+    {
+        lock (_typedWordLock)
+        {
+            _typedWord = string.Empty;
+            _typedWordWindow = IntPtr.Zero;
+            _typedWordAtUtc = DateTime.MinValue;
+        }
     }
 
     private void BeginPending(
@@ -252,6 +357,23 @@ public sealed class KeyboardHook : IDisposable
         int nCode,
         IntPtr wParam,
         IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetKeyboardState([Out] byte[] lpKeyState);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int ToUnicodeEx(uint wVirtKey, uint wScanCode,
+        byte[] lpKeyState, StringBuilder pwszBuff, int cchBuff, uint wFlags, IntPtr dwhkl);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, IntPtr lpdwProcessId);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetKeyboardLayout(uint idThread);
 
     [DllImport(
         "kernel32.dll",

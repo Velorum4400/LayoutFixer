@@ -42,6 +42,14 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.3.15", Array.Empty<string>(), new[]
+        {
+            T(
+                "Added a last typed-word fallback for Chromium/WebView editors that refuse both UI Automation and copy requests. Insert can now delete the tracked word by its known character count and send converted Unicode text directly, without clipboard delays.",
+                "Добавлен fallback последнего набранного слова для редакторов Chromium/WebView, которые не отдают текст ни через UI Automation, ни через копирование. Insert теперь удаляет отслеженное слово по известной длине и вводит преобразованный Unicode-текст напрямую, без задержек буфера.",
+                "נוסף מנגנון גיבוי למילה האחרונה שהוקלדה עבור עורכי Chromium/WebView שאינם מחזירים טקסט לא דרך UI Automation ולא דרך העתקה. Insert יכול כעת למחוק את המילה שנעקבה לפי אורכה הידוע ולשלוח טקסט Unicode מומר ישירות, ללא עיכובי לוח.")
+        });
+
         AddVersion("v1.3.14", Array.Empty<string>(), new[]
         {
             T(

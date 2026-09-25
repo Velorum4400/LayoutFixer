@@ -2,6 +2,15 @@
 
 Windows tray utility for correcting text typed in the wrong keyboard layout.
 
+## 1.3.15 — tracked last word for ChatGPT/WebView
+
+When a Chromium/WebView editor provides neither a UI Automation text range nor
+clipboard text after copying, LayoutFixer uses the last contiguous word typed
+in that focused window during the previous ten seconds. It removes exactly the
+known character count with Backspace and sends the converted Unicode text
+directly. The fallback is used only for ordinary safe EN/RU/HE characters and
+logs `Last-word replacement using tracked keyboard fallback, length=...`.
+
 ## 1.3.14 — correct target and selection for ChatGPT LTR words
 
 When Russian or Hebrew text is under the matching active layout, its correction

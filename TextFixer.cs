@@ -34,7 +34,8 @@ public static class TextFixer
         out KeyboardLanguage from,
         out KeyboardLanguage to,
         IntPtr expectedWindow = default,
-        bool captureSelection = false)
+        bool captureSelection = false,
+        string? typedLastWord = null)
     {
         IntPtr targetWindow = GetForegroundWindow();
         IntPtr focusWindow = GetFocusedWindow(targetWindow);
@@ -76,6 +77,7 @@ public static class TextFixer
             }
             string? original;
             LastWordTarget? lastWordTarget = null;
+            bool useTypedWordFallback = false;
 
             if (lastWord)
             {
@@ -108,12 +110,19 @@ public static class TextFixer
 
             if (string.IsNullOrEmpty(original))
             {
+                if (lastWord && !string.IsNullOrEmpty(typedLastWord) && CanBackspaceByLength(typedLastWord))
+                {
+                    original = typedLastWord;
+                    useTypedWordFallback = true;
+                    Log($"Using tracked keyboard last word, length={original.Length}, sample={Sample(original)}");
+                }
+
                 // Some Chromium/WebView editors (including the ChatGPT Windows app)
                 // expose text through the clipboard but do not expose a usable UIA
                 // caret/range. In last-word mode, create the selection with normal
                 // keyboard input before copying. This makes Ctrl+V replace the word
                 // instead of appending the converted text after it.
-                if (lastWord)
+                if (string.IsNullOrEmpty(original) && lastWord)
                 {
                     EnsureClipboardSnapshot();
                     Log("UIA last-word selection unavailable; trying Ctrl+Shift+Left keyboard fallback");
@@ -121,30 +130,33 @@ public static class TextFixer
                     Thread.Sleep(40);
                 }
 
-                EnsureClipboardSnapshot();
-                uint seqCopyStart = GetClipboardSequenceNumber();
-                Copy();
-                original = WaitForClipboardText(seqCopyStart, 12);
-                if (!string.IsNullOrEmpty(original))
-                    clipboardChanged = true;
-
-                if (string.IsNullOrEmpty(original) && lastWord)
+                if (string.IsNullOrEmpty(original))
                 {
-                    Log("Ctrl+C did not copy last word; trying Ctrl+Insert");
-                    seqCopyStart = GetClipboardSequenceNumber();
-                    CopyWithCtrlInsert();
+                    EnsureClipboardSnapshot();
+                    uint seqCopyStart = GetClipboardSequenceNumber();
+                    Copy();
                     original = WaitForClipboardText(seqCopyStart, 12);
                     if (!string.IsNullOrEmpty(original))
                         clipboardChanged = true;
-                }
 
-                if (string.IsNullOrEmpty(original) && focusWindow != IntPtr.Zero)
-                {
-                    seqCopyStart = GetClipboardSequenceNumber();
-                    SendMessage(focusWindow, WM_COPY, IntPtr.Zero, IntPtr.Zero);
-                    original = WaitForClipboardText(seqCopyStart, 8);
-                    if (!string.IsNullOrEmpty(original))
-                        clipboardChanged = true;
+                    if (string.IsNullOrEmpty(original) && lastWord)
+                    {
+                        Log("Ctrl+C did not copy last word; trying Ctrl+Insert");
+                        seqCopyStart = GetClipboardSequenceNumber();
+                        CopyWithCtrlInsert();
+                        original = WaitForClipboardText(seqCopyStart, 12);
+                        if (!string.IsNullOrEmpty(original))
+                            clipboardChanged = true;
+                    }
+
+                    if (string.IsNullOrEmpty(original) && focusWindow != IntPtr.Zero)
+                    {
+                        seqCopyStart = GetClipboardSequenceNumber();
+                        SendMessage(focusWindow, WM_COPY, IntPtr.Zero, IntPtr.Zero);
+                        original = WaitForClipboardText(seqCopyStart, 8);
+                        if (!string.IsNullOrEmpty(original))
+                            clipboardChanged = true;
+                    }
                 }
             }
 
@@ -187,6 +199,19 @@ public static class TextFixer
             // visual selection in bidirectional text. Plain LTR words use the
             // editor's normal keyboard selection; Hebrew retains the verified
             // logical-caret/backspace path.
+            if (useTypedWordFallback)
+            {
+                if (!DeleteKnownLastWordWithBackspace(original, targetWindow, focusWindow))
+                    return false;
+                SendUnicodeText(converted);
+                Log($"Last-word replacement sent as direct Unicode text, length={converted.Length}");
+                Log($"TIMING direct replacement: {elapsed.ElapsedMilliseconds} ms");
+                SwitchForegroundLayout(targetWindow, focusWindow, to);
+                Log("Layout switch request sent");
+                Log("SUCCESS");
+                return true;
+            }
+
             if (lastWordTarget != null)
             {
                 bool keyboardSelection = !ContainsRightToLeftText(original);
@@ -635,6 +660,28 @@ public static class TextFixer
 
         Log("FAIL: could not confirm collapsed caret and original text before backspace fallback");
         return false;
+    }
+
+    private static bool DeleteKnownLastWordWithBackspace(string original, IntPtr foreground, IntPtr focus)
+    {
+        if (!CanBackspaceByLength(original) || !CorrectionWorker.CanContinue ||
+            GetForegroundWindow() != foreground || GetFocusedWindow(foreground) != focus)
+        {
+            Log("FAIL: tracked last-word fallback cannot safely delete text");
+            return false;
+        }
+
+        var inputs = new INPUT[checked(original.Length * 2)];
+        for (int i = 0; i < original.Length; i++)
+        {
+            inputs[i * 2] = Key(VK_BACK, false);
+            inputs[i * 2 + 1] = Key(VK_BACK, true);
+        }
+        Log($"Last-word replacement using tracked keyboard fallback, length={original.Length}");
+        SendKeys(inputs);
+        Thread.Sleep(20);
+        return CorrectionWorker.CanContinue && GetForegroundWindow() == foreground &&
+               GetFocusedWindow(foreground) == focus;
     }
 
     private static string? TryGetSelectionOrSelectLastWordViaAutomation(IntPtr hwnd, out LastWordTarget? target)

@@ -1,4 +1,4 @@
-# Last-word replacement regression checks (1.3.14)
+# Last-word replacement regression checks (1.3.15)
 
 Run `dotnet run --project tests/Regression/Regression.csproj -c Release` for
 conversion, deletion-count safety, portable paths and native Edit/RichEdit
@@ -76,3 +76,9 @@ For 1.3.14, type `можно ли в срфепзе` in ChatGPT with Russian act
 Insert at the end. Expect exactly `можно ли в chatgpt`; the log must show
 `target=English` and `Last-word replacement using keyboard selection`. Verify
 the Hebrew-with-digits case still uses the logical-caret/backspace path.
+
+For 1.3.15, when ChatGPT returns no UIA or clipboard word, type a word and
+press Insert within ten seconds without moving the caret. Expect the log to
+show `Using tracked keyboard last word` and `tracked keyboard fallback`; no
+clipboard-copy timeout should occur. Moving the caret, changing focus or
+waiting more than ten seconds must disable this fallback.
