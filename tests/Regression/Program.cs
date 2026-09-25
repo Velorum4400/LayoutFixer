@@ -9,68 +9,81 @@ void Check(bool condition, string name)
     passed++;
 }
 
-Check(LayoutConverter.Convert("руддщ", KeyboardLanguage.Russian, KeyboardLanguage.English) == "hello",
-    "ordinary Russian conversion");
-Check(LayoutConverter.Convert("יקךךם", KeyboardLanguage.Hebrew, KeyboardLanguage.English) == "hello",
-    "ordinary Hebrew conversion");
+Check(KeyboardLayoutService.RefreshLayouts(), "installed layouts refresh");
+IReadOnlyList<KeyboardLayoutInfo> layouts = KeyboardLayoutService.Layouts;
+Check(layouts.Count > 0, "installed layout list retained");
+Check(layouts.Select(x => x.Handle).Distinct().Count() == layouts.Count, "layout handles are unique");
+Check(LayoutConverter.Convert("text \t\r\n", layouts[0], layouts[0]) == "text \t\r\n",
+    "same-layout conversion preserves text");
+if (layouts.Count > 1)
+{
+    Check(KeyboardLayoutService.TryGetNext(layouts[0], out KeyboardLayoutInfo second) &&
+          second.Handle == layouts[1].Handle, "next layout follows saved order");
+    Check(KeyboardLayoutService.TryGetNext(layouts[^1], out KeyboardLayoutInfo first) &&
+          first.Handle == layouts[0].Handle, "last layout wraps to first");
+    Check(LayoutConverter.Convert(" \t\r\n", layouts[0], layouts[1]) == " \t\r\n",
+        "whitespace survives cross-layout conversion");
+}
+KeyboardLayoutInfo? english = layouts.FirstOrDefault(x => (x.LanguageId & 0x03ff) == 0x09);
+KeyboardLayoutInfo? russian = layouts.FirstOrDefault(x => (x.LanguageId & 0x03ff) == 0x19);
+KeyboardLayoutInfo? hebrew = layouts.FirstOrDefault(x => (x.LanguageId & 0x03ff) == 0x0d);
+if (english != null && russian != null)
+{
+    Check(LayoutConverter.Convert("ghbdtn", english, russian) == "привет",
+        "physical key conversion English to Russian");
+    Check(LayoutConverter.Convert("#", english, russian) == "№",
+        "Shift punctuation conversion English to Russian");
+}
+if (english != null && hebrew != null)
+    Check(LayoutConverter.Convert("akuo", english, hebrew) == "שלום",
+        "physical key conversion English to Hebrew");
 
-string mixedRussian = "В ролике авторы Gamer's Nexus показали модели LG и Wi-Fi";
-string mixedHebrew = LayoutConverter.Convert(mixedRussian, KeyboardLanguage.Russian, KeyboardLanguage.Hebrew);
-string mixedEnglish = LayoutConverter.Convert(mixedHebrew, KeyboardLanguage.Hebrew, KeyboardLanguage.English);
-Check(LayoutConverter.Convert(mixedEnglish, KeyboardLanguage.English, KeyboardLanguage.Russian) == mixedRussian,
-    "layout cycle preserves embedded English names");
+Check(typeof(TextReplacementService).GetMethod("TryReplaceAllText") != null,
+    "text replacement coordinator is available");
+Check(typeof(ClipboardService).GetMethod("WaitForTextChange") != null,
+    "clipboard sequence wait is isolated in ClipboardService");
+Check(typeof(KeyboardInputService).GetMethod("SelectAll") != null,
+    "SendInput chords are isolated in KeyboardInputService");
+Check(typeof(HotkeyService).GetEvents().Any(x => x.Name == "Pressed"),
+    "hotkey service exposes only the trigger event");
+Check(typeof(TextReplacementService).Assembly.GetType("LayoutFixer.TextFixer") == null,
+    "legacy combined text fixer removed");
+Check(typeof(LayoutConverter).GetMethods(BindingFlags.Public | BindingFlags.Static)
+    .All(method => !method.GetParameters().Any(parameter => parameter.ParameterType.Name.Contains("Clipboard"))),
+    "layout converter has no Clipboard dependency");
 
-var chooseTarget = typeof(KeyboardLayout).GetMethod("TryChooseCorrectionTarget",
-    BindingFlags.NonPublic | BindingFlags.Static)!;
-var layouts = (IReadOnlyList<KeyboardLanguage>)new[]
-    { KeyboardLanguage.English, KeyboardLanguage.Russian, KeyboardLanguage.Hebrew };
-object?[] russianTarget = { KeyboardLanguage.Russian, KeyboardLanguage.Russian, layouts, null };
-Check((bool)chooseTarget.Invoke(null, russianTarget)! &&
-      (KeyboardLanguage)russianTarget[3]! == KeyboardLanguage.English,
-    "Russian text under Russian layout targets English");
-
-Check(typeof(TextFixer).GetMethod("TryFixAllText") != null, "full-text correction entry point remains available");
-Check(typeof(TextFixer).GetMethod("TryFix") == null, "selection and last-word correction entry point removed");
-Check(typeof(TextFixer).Assembly.GetType("LayoutFixer.SelectionPreserver") == null,
-    "selection preservation removed");
-Check(typeof(TextFixer).Assembly.GetType("LayoutFixer.NativeEditSelection") == null,
-    "last-word native selection removed");
-Check(typeof(TextFixer).Assembly.GetType("LayoutFixer.ScannerInputService") == null,
-    "scanner service removed");
-Check(typeof(AppSettings).GetProperty("KeepSelectionAfterCorrection") == null,
-    "keep-selection setting removed");
-Check(typeof(AppSettings).GetProperty("ScannerEnabled") == null,
-    "scanner settings removed");
-Check(typeof(AppSettings).GetProperty("LastWordEnabled") == null,
-    "last-word settings removed");
-
-Exception? nativeFailure = null;
-var nativeThread = new Thread(() =>
+Exception? staFailure = null;
+var staThread = new Thread(() =>
 {
     try
     {
-        var capture = typeof(TextFixer).GetMethod("CaptureClipboardSnapshot",
-            BindingFlags.NonPublic | BindingFlags.Static)!;
-        var restore = typeof(TextFixer).GetMethod("RestoreClipboardSnapshot",
-            BindingFlags.NonPublic | BindingFlags.Static)!;
-        object snapshot = capture.Invoke(null, null)!;
-        try
-        {
-            var publish = typeof(TextFixer).Assembly.GetType("LayoutFixer.NativeClipboard")!
-                .GetMethod("TrySetText")!;
-            Check((bool)publish.Invoke(null, new object[] { "тест שלום 123" })!,
-                "native Unicode clipboard publish");
-            Check(System.Windows.Forms.Clipboard.GetText() == "тест שלום 123",
-                "native clipboard survives owner window disposal");
-        }
-        finally { restore.Invoke(null, new[] { snapshot }); }
+        Check(ClipboardService.TryCapture(out ClipboardSnapshot snapshot), "Clipboard snapshot captured");
+        uint beforeWrite = ClipboardService.SequenceNumber;
+        Check(ClipboardService.TrySetText("тест שלום 123", out uint writtenSequence),
+            "Unicode text written through ClipboardService");
+        Check(writtenSequence != beforeWrite, "Clipboard sequence changes after write");
+        Check(System.Windows.Forms.Clipboard.GetText() == "тест שלום 123", "written Clipboard text is readable");
+        Check(ClipboardService.RestoreIfUnchanged(snapshot, writtenSequence) == ClipboardRestoreResult.Restored,
+            "Clipboard restored when sequence is unchanged");
+
+        Check(ClipboardService.TryCapture(out ClipboardSnapshot safetySnapshot),
+            "Clipboard snapshot captured for external-change test");
+        Check(ClipboardService.TrySetText("LayoutFixer value", out uint layoutFixerSequence),
+            "LayoutFixer test value written");
+        Check(ClipboardService.TrySetText("new external value", out uint externalSequence),
+            "new external Clipboard value written");
+        Check(ClipboardService.RestoreIfUnchanged(safetySnapshot, layoutFixerSequence) ==
+              ClipboardRestoreResult.SkippedBecauseChanged,
+            "restore skips Clipboard changed after LayoutFixer write");
+        Check(System.Windows.Forms.Clipboard.GetText() == "new external value",
+            "new Clipboard data is not overwritten");
+        Check(ClipboardService.RestoreIfUnchanged(safetySnapshot, externalSequence) ==
+              ClipboardRestoreResult.Restored,
+            "external-change test restores original Clipboard safely");
 
         using var viewer = new LogViewerForm();
         viewer.CreateControl();
-        Check(!viewer.Controls.OfType<System.Windows.Forms.TabControl>().Any(),
-            "scanner log tab removed");
-        Check(viewer.Controls.OfType<System.Windows.Forms.TextBox>().Count() == 1,
-            "diagnostic log remains available");
+        Check(!viewer.Controls.OfType<System.Windows.Forms.TabControl>().Any(), "scanner log tab remains removed");
 
         using var settings = new SettingsShellForm(new AppSettings());
         settings.CreateControl();
@@ -80,16 +93,16 @@ var nativeThread = new Thread(() =>
         var scannerNotice = (System.Windows.Forms.Label)typeof(SettingsShellForm)
             .GetField("_scannerUnavailable", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(settings)!;
         Check(wordNotice.Text == unavailable && scannerNotice.Text == unavailable,
-            "disabled features show temporarily unavailable");
+            "deferred features remain marked unavailable");
     }
-    catch (Exception ex) { nativeFailure = ex; }
+    catch (Exception ex) { staFailure = ex; }
 });
-nativeThread.SetApartmentState(ApartmentState.STA);
-nativeThread.Start();
-nativeThread.Join();
-if (nativeFailure != null) throw nativeFailure;
+staThread.SetApartmentState(ApartmentState.STA);
+staThread.Start();
+staThread.Join();
+if (staFailure != null) throw staFailure;
 
-var worker = typeof(TextFixer).Assembly.GetType("LayoutFixer.CorrectionWorker")!;
+var worker = typeof(TextReplacementService).Assembly.GetType("LayoutFixer.CorrectionWorker")!;
 var run = worker.GetMethod("TryRun")!;
 var busy = worker.GetProperty("IsBusy")!;
 using var entered = new ManualResetEventSlim();
@@ -97,8 +110,8 @@ using var release = new ManualResetEventSlim();
 Action blocked = () => { entered.Set(); release.Wait(TimeSpan.FromSeconds(5)); };
 Check((bool)run.Invoke(null, new object[] { blocked })!, "worker accepts correction");
 Check(entered.Wait(TimeSpan.FromSeconds(2)), "worker starts");
-Check(!(bool)run.Invoke(null, new object[] { (Action)(() => { }) })!, "overlapping correction rejected");
+Check(!(bool)run.Invoke(null, new object[] { (Action)(() => { }) })!, "parallel correction rejected");
 release.Set();
-Check(SpinWait.SpinUntil(() => !(bool)busy.GetValue(null)!, 2000), "worker releases guard");
+Check(SpinWait.SpinUntil(() => !(bool)busy.GetValue(null)!, 2000), "worker releases operation guard");
 
 Console.WriteLine($"{passed} regression checks passed.");

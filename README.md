@@ -2,10 +2,29 @@
 
 Windows tray utility for correcting text typed with the wrong keyboard layout.
 
-## Current architecture (1.4.0)
+## Current architecture (1.5.0)
 
 The active application contains one correction command: **Correct all text**.
-Its behavior is unchanged while the command is being redesigned separately.
+At startup, LayoutFixer stores the Windows keyboard layouts in their system
+order. Each successful correction advances exactly one position in that list
+and wraps from the last layout to the first.
+
+The operation uses these independent components:
+
+- `HotkeyService` reports the configured hotkey without correction logic.
+- `TextReplacementService` coordinates one operation at a time and binds it to
+  the window that was active when the operation began.
+- `ClipboardService` snapshots all available formats, waits for sequence-number
+  changes and restores the snapshot only when no newer Clipboard data exists.
+- `KeyboardInputService` sends only Ctrl+A, Ctrl+C and Ctrl+V through SendInput.
+- `KeyboardLayoutService` refreshes and atomically stores installed layouts,
+  resolves the active window layout and switches to the next layout.
+- `LayoutConverter` maps each character through its physical key and modifiers
+  from the source Windows layout to the target layout.
+
+Converted text is pasted as one Clipboard value. The default controlled delay
+before safe Clipboard restoration is 100 ms. Diagnostics record stages,
+timings, handles, layout names and lengths without recording user text.
 
 The following settings remain visible as disabled placeholders and display
 **Temporarily unavailable**:

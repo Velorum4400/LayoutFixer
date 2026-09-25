@@ -50,9 +50,9 @@ public static class UiText
             "Чтобы изменить хот кей, нажми на окно с действуещим хоткеем. В комбинации возможно максимум 3 кнопки",
             "כדי לשנות מקש קיצור, לחץ על החלון עם מקש הקיצור הנוכחי. צירוף יכול להכיל לכל היותר 3 מקשים"),
         ["supported_info"] = L(
-            "Supported: English, Russian, Hebrew.\r\nLayoutFixer uses only keyboard layouts already installed in Windows.\r\nThe switching cycle is built only from available languages.",
-            "Поддерживаются: English, Русский, עברית.\r\nLayoutFixer использует только раскладки, уже установленные в Windows.\r\nЦикл переключения строится только из доступных языков.",
-            "נתמכות: אנגלית, רוסית, עברית.\r\nLayoutFixer משתמש רק בפריסות מקלדת שכבר מותקנות ב-Windows.\r\nמחזור ההחלפה נבנה רק מהשפות הזמינות."),
+            "LayoutFixer uses keyboard layouts already installed in Windows.\r\nThe switching cycle follows their saved system order.",
+            "LayoutFixer использует раскладки, уже установленные в Windows.\r\nЦикл переключения следует их сохранённому системному порядку.",
+            "LayoutFixer משתמש בפריסות המקלדת שכבר מותקנות ב-Windows.\r\nמחזור ההחלפה פועל לפי הסדר השמור במערכת."),
         ["available_layouts"] = L("Available layouts:", "Доступные раскладки:", "פריסות זמינות:"),
         ["version"] = L("Version:", "Версия:", "גרסה:"),
         ["changelog"] = L("Change log", "Список изменений", "רשימת שינויים"),

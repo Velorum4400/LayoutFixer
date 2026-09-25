@@ -9,14 +9,14 @@ public sealed class TrayApplicationContext : ApplicationContext
 {
     private readonly NotifyIcon _tray;
     private readonly Icon _appIcon;
-    private readonly KeyboardHook _hook;
+    private readonly HotkeyService _hotkeyService;
     private readonly AppSettings _settings;
     private readonly System.Windows.Forms.Timer _hotkeyTimer;
     private bool _hotkeyQueued;
 
     public TrayApplicationContext()
     {
-        KeyboardLayout.Initialize();
+        KeyboardLayoutService.RefreshLayouts();
         WriteStartupDiagnostic();
         _settings = AppSettings.Load();
         UiText.Language = _settings.Language;
@@ -29,7 +29,7 @@ public sealed class TrayApplicationContext : ApplicationContext
             Text = AppInfo.DisplayName,
             ContextMenuStrip = BuildMenu()
         };
-        _hook = new KeyboardHook { FullTextHotkey = _settings.FullTextHotkey };
+        _hotkeyService = new HotkeyService { Hotkey = _settings.FullTextHotkey };
         _hotkeyTimer = new System.Windows.Forms.Timer { Interval = 60 };
         _hotkeyTimer.Tick += (_, _) =>
         {
@@ -39,7 +39,7 @@ public sealed class TrayApplicationContext : ApplicationContext
             _hotkeyQueued = false;
             ExecuteFullTextHotkey();
         };
-        _hook.HotkeyPressed += OnHotkey;
+        _hotkeyService.Pressed += OnHotkey;
     }
 
     private ContextMenuStrip BuildMenu()
@@ -78,9 +78,8 @@ public sealed class TrayApplicationContext : ApplicationContext
 
     private void FixAllText()
     {
-        IntPtr target = TextFixer.ForegroundWindow;
-        CorrectionWorker.TryRun(() => TextFixer.TryFixAllText(
-            out KeyboardLanguage _, out KeyboardLanguage _, target));
+        IntPtr target = TextReplacementService.ForegroundWindow;
+        CorrectionWorker.TryRun(() => TextReplacementService.TryReplaceAllText(target));
     }
 
     private void OpenSettings()
@@ -89,7 +88,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         if (form.ShowDialog() == DialogResult.OK)
         {
             UiText.Language = _settings.Language;
-            _hook.FullTextHotkey = _settings.FullTextHotkey;
+            _hotkeyService.Hotkey = _settings.FullTextHotkey;
             _tray.ContextMenuStrip = BuildMenu();
         }
     }
@@ -98,7 +97,7 @@ public sealed class TrayApplicationContext : ApplicationContext
     {
         _hotkeyTimer.Stop();
         _hotkeyTimer.Dispose();
-        _hook.Dispose();
+        _hotkeyService.Dispose();
         _tray.Visible = false;
         _tray.Dispose();
         _appIcon.Dispose();
@@ -109,7 +108,7 @@ public sealed class TrayApplicationContext : ApplicationContext
     {
         try
         {
-            string available = string.Join(",", KeyboardLayout.AvailableLanguages.Select(KeyboardLayout.ShortName));
+            string available = string.Join(",", KeyboardLayoutService.Layouts.Select(layout => layout.ShortName));
             System.IO.Directory.CreateDirectory(AppRuntime.DataDirectory);
             System.IO.File.AppendAllText(AppRuntime.GetDataPath("diagnostic.log"),
                 $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {AppInfo.DisplayName} started. Installed supported layouts: [{available}]\r\n");

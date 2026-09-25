@@ -42,6 +42,28 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.5.0", new[]
+        {
+            T(
+                "Rebuilt Correct all text around dedicated hotkey, replacement, Clipboard, keyboard-input, layout and conversion services.",
+                "Функция «Исправлять весь текст» переработана на основе отдельных сервисов горячей клавиши, замены, Clipboard, клавиатурного ввода, раскладок и преобразования.",
+                "הפונקציה לתיקון כל הטקסט נבנתה מחדש סביב שירותים נפרדים למקש קיצור, החלפה, לוח, קלט מקלדת, פריסות והמרה."),
+            T(
+                "Each successful run now advances from the active window layout to the next installed Windows layout in the saved system order.",
+                "Каждый успешный запуск теперь переводит текст из текущей раскладки активного окна в следующую установленную раскладку по сохранённому системному порядку.",
+                "כל הפעלה מוצלחת מעבירה כעת את הטקסט מפריסת החלון הפעיל לפריסת Windows המותקנת הבאה לפי הסדר השמור במערכת.")
+        }, new[]
+        {
+            T(
+                "Clipboard restoration now checks its sequence number and never overwrites newer data copied by the user or another process. All waits are bounded and active-window changes cancel insertion.",
+                "Восстановление Clipboard теперь проверяет sequence number и не перезаписывает новые данные пользователя или другого процесса. Все ожидания ограничены, а смена активного окна отменяет вставку.",
+                "שחזור הלוח בודק כעת את מספר הרצף ואינו דורס נתונים חדשים של המשתמש או תהליך אחר. כל ההמתנות מוגבלות ושינוי החלון הפעיל מבטל את ההדבקה."),
+            T(
+                "Character conversion now uses the physical key and Shift/modifier mapping of the actual source and target Windows layouts. Diagnostic logs no longer include user text samples.",
+                "Преобразование символов теперь использует физическую клавишу и Shift/модификаторы реальных исходной и целевой раскладок Windows. В диагностический лог больше не записываются образцы текста пользователя.",
+                "המרת תווים משתמשת כעת במקש הפיזי ובמיפוי Shift והמקשים המשנים של פריסות המקור והיעד בפועל. יומן האבחון אינו כולל עוד דוגמאות מטקסט המשתמש.")
+        });
+
         AddVersion("v1.4.0", new[]
         {
             T(

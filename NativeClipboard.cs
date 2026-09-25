@@ -11,7 +11,7 @@ internal static class NativeClipboard
 {
     // Publish eagerly rendered Unicode data without OLE's SetDataObject/flush
     // path, which can wait for the previous Chromium clipboard owner.
-    public static bool TrySetText(string text)
+    public static bool TrySetText(string text, int timeoutMilliseconds = 500)
     {
         byte[] bytes = Encoding.Unicode.GetBytes(text + "\0");
         IntPtr memory = GlobalAlloc(0x0002, (UIntPtr)bytes.Length);
@@ -28,7 +28,7 @@ internal static class NativeClipboard
             var wait = Stopwatch.StartNew();
             while (!(opened = OpenClipboard(owner.Handle)))
             {
-                if (wait.ElapsedMilliseconds >= 250) return false;
+                if (wait.ElapsedMilliseconds >= timeoutMilliseconds) return false;
                 Thread.Sleep(10);
             }
             if (!EmptyClipboard() || SetClipboardData(13, memory) == IntPtr.Zero) return false;

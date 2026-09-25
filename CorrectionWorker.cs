@@ -3,8 +3,8 @@ using System.Threading;
 
 namespace LayoutFixer;
 
-// Clipboard needs STA. Keep the UI/hook thread pumping while another process
-// handles SendInput and UIA; otherwise keyboard hooks can stall that process.
+// Clipboard needs STA. Keep the UI/hook thread pumping while the worker handles
+// Clipboard access and SendInput so the global hotkey remains responsive.
 internal static class CorrectionWorker
 {
     // Keep a stalled UI Automation provider from blocking later corrections.

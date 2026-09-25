@@ -442,7 +442,7 @@ public sealed class SettingsShellForm : Form
         _languageLabel.Text = UiText.Get("language");
         _startup.Text = UiText.Get("startup");
         _layoutsTitle.Text = UiText.Get("installed_layouts");
-        _layoutsValue.Text = string.Join(", ", KeyboardLayout.AvailableLanguages.Select(KeyboardLayout.ShortName));
+        _layoutsValue.Text = string.Join(" → ", KeyboardLayoutService.Layouts.Select(layout => layout.ShortName));
         _generalInfo.Text = UiText.Get("supported_info");
         _changeLog.Text = UiText.Get("changelog");
         _clearLog.Text = UiText.Get("open_log");
