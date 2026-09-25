@@ -7,7 +7,10 @@ namespace LayoutFixer;
 // handles SendInput and UIA; otherwise keyboard hooks can stall that process.
 internal static class CorrectionWorker
 {
-    private const int WatchdogTimeoutMs = 1500;
+    // Last-word keyboard fallback has a bounded 2.4 second clipboard wait.
+    // Keep the watchdog beyond that normal path, while still recovering from
+    // a genuinely stalled UIA provider.
+    private const int WatchdogTimeoutMs = 3000;
     private static int _busy;
     private static int _nextOperation;
     private static int _activeOperation;
@@ -55,6 +58,6 @@ internal static class CorrectionWorker
             return;
         Volatile.Write(ref _busy, 0);
         DiagnosticLogStore.Write(false,
-            "FAIL: correction watchdog elapsed after 1500 ms; operation canceled and hotkeys re-enabled");
+            "FAIL: correction watchdog elapsed after 3000 ms; operation canceled and hotkeys re-enabled");
     }
 }

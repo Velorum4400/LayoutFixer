@@ -42,6 +42,14 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.3.13", Array.Empty<string>(), new[]
+        {
+            T(
+                "Fixed the watchdog cancelling normal last-word clipboard fallback. The fallback now keeps the existing clipboard intact, tries Ctrl+C and Ctrl+Insert, and restores the clipboard only after a successful copy.",
+                "Исправлен watchdog, который отменял обычный fallback копирования последнего слова. Fallback теперь сохраняет текущий буфер, пробует Ctrl+C и Ctrl+Insert и восстанавливает буфер только после успешного копирования.",
+                "תוקן ה-watchdog שביטל את מנגנון הגיבוי הרגיל להעתקת המילה האחרונה. מנגנון הגיבוי שומר את הלוח הקיים, מנסה Ctrl+C ו-Ctrl+Insert ומשחזר את הלוח רק לאחר העתקה מוצלחת.")
+        });
+
         AddVersion("v1.3.12", Array.Empty<string>(), new[]
         {
             T(

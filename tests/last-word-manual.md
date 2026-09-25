@@ -1,4 +1,4 @@
-# Last-word replacement regression checks (1.3.12)
+# Last-word replacement regression checks (1.3.13)
 
 Run `dotnet run --project tests/Regression/Regression.csproj -c Release` for
 conversion, deletion-count safety, portable paths and native Edit/RichEdit
@@ -60,9 +60,14 @@ confirm it still converts to Russian.
 
 For 1.3.11, attempt a correction in the VS Code Git Bash terminal, then switch
 to a normal text editor and use a hotkey. If terminal UI Automation stalls, the
-log must contain `correction watchdog elapsed after 1500 ms`; the next hotkey
+log must contain `correction watchdog elapsed after 3000 ms`; the next hotkey
 must work without restarting LayoutFixer.
 
 For 1.3.12, confirm ordinary full-text, last-word, scanner and Open log flows
 remain available after cleanup. Clipboard snapshots should be logged only when
 a correction actually falls back to clipboard input or publication.
+
+For 1.3.13, test Insert in ChatGPT when UIA last-word selection is unavailable.
+The fallback must not log a watchdog failure before its copy attempts finish.
+If Ctrl+C does not copy, expect a `trying Ctrl+Insert` log entry. A failed copy
+must leave the user's existing clipboard unchanged.

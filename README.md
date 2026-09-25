@@ -2,6 +2,14 @@
 
 Windows tray utility for correcting text typed in the wrong keyboard layout.
 
+## 1.3.13 — resilient ChatGPT last-word fallback
+
+The watchdog now allows the complete bounded keyboard-copy fallback to finish.
+When UI Automation is unavailable, LayoutFixer keeps the existing clipboard,
+selects the preceding word, then tries both `Ctrl+C` and `Ctrl+Insert` before
+the control-level copy fallback. It restores the clipboard only if a copy
+actually succeeded.
+
 ## 1.3.12 — maintenance cleanup
 
 Removed the unused legacy settings screen and obsolete clipboard selection

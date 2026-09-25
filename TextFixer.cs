@@ -20,6 +20,7 @@ public static class TextFixer
     private const int VK_SHIFT = 0x10;
     private const int VK_LEFT = 0x25;
     private const int VK_BACK = 0x08;
+    private const int VK_INSERT = 0x2D;
 
     private const uint KEYEVENTF_KEYUP = 0x0002;
     private const uint KEYEVENTF_UNICODE = 0x0004;
@@ -115,9 +116,6 @@ public static class TextFixer
                 if (lastWord)
                 {
                     EnsureClipboardSnapshot();
-                    TryClearClipboard();
-                    clipboardChanged = true;
-                    Log("Clipboard clear attempted for keyboard fallback");
                     Log("UIA last-word selection unavailable; trying Ctrl+Shift+Left keyboard fallback");
                     SelectPreviousWordWithKeyboard();
                     Thread.Sleep(40);
@@ -127,11 +125,26 @@ public static class TextFixer
                 uint seqCopyStart = GetClipboardSequenceNumber();
                 Copy();
                 original = WaitForClipboardText(seqCopyStart, 12);
+                if (!string.IsNullOrEmpty(original))
+                    clipboardChanged = true;
+
+                if (string.IsNullOrEmpty(original) && lastWord)
+                {
+                    Log("Ctrl+C did not copy last word; trying Ctrl+Insert");
+                    seqCopyStart = GetClipboardSequenceNumber();
+                    CopyWithCtrlInsert();
+                    original = WaitForClipboardText(seqCopyStart, 12);
+                    if (!string.IsNullOrEmpty(original))
+                        clipboardChanged = true;
+                }
 
                 if (string.IsNullOrEmpty(original) && focusWindow != IntPtr.Zero)
                 {
+                    seqCopyStart = GetClipboardSequenceNumber();
                     SendMessage(focusWindow, WM_COPY, IntPtr.Zero, IntPtr.Zero);
-                    original = WaitForClipboardText(GetClipboardSequenceNumber(), 20, allowSameSequence: true);
+                    original = WaitForClipboardText(seqCopyStart, 8);
+                    if (!string.IsNullOrEmpty(original))
+                        clipboardChanged = true;
                 }
             }
 
@@ -770,6 +783,7 @@ public static class TextFixer
     }
 
     private static void Copy() => SendChord(VK_CONTROL, VK_C);
+    private static void CopyWithCtrlInsert() => SendChord(VK_CONTROL, VK_INSERT);
     private static bool Paste() => SendChord(VK_CONTROL, VK_V);
 
     private static bool SendChord(int modifier, int key)

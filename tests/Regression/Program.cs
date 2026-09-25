@@ -191,7 +191,7 @@ Check((bool)run.Invoke(null, new object[] { (Action)(() =>
     stalledRelease.Wait(TimeSpan.FromSeconds(5));
 }) })!, "worker accepts simulated stuck UIA operation");
 Check(stalledEntered.Wait(TimeSpan.FromSeconds(2)), "stuck operation started");
-Check(SpinWait.SpinUntil(() => !(bool)busy.GetValue(null)!, 2500),
+Check(SpinWait.SpinUntil(() => !(bool)busy.GetValue(null)!, 4000),
     "watchdog re-enables corrections after a stuck operation");
 Check((bool)run.Invoke(null, new object[] { (Action)(() => { }) })!,
     "next correction accepted after watchdog expiry");
