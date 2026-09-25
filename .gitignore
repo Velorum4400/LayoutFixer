@@ -1,8 +1,6 @@
 bin/
 obj/
 dist/
-portable/
-installer/output/
 
 .vs/
 .vscode/

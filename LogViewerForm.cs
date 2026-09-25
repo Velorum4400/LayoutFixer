@@ -6,8 +6,7 @@ namespace LayoutFixer;
 
 public sealed class LogViewerForm : Form
 {
-    private readonly TabControl _tabs = new() { Dock = DockStyle.Fill };
-    private readonly TextBox[] _text = new TextBox[2];
+    private readonly TextBox _text = new();
     private readonly System.Windows.Forms.Timer _refresh = new() { Interval = 1000 };
 
     public LogViewerForm()
@@ -18,35 +17,31 @@ public sealed class LogViewerForm : Form
         ClientSize = new Size(920, 560);
         MinimumSize = new Size(600, 360);
         Font = new Font("Segoe UI", 10);
-        for (int i = 0; i < 2; i++)
+        var clear = new Button { Text = UiText.Get("clear_log"), Dock = DockStyle.Bottom, Height = 38 };
+        _text.Multiline = true;
+        _text.ReadOnly = true;
+        _text.Dock = DockStyle.Fill;
+        _text.ScrollBars = ScrollBars.Both;
+        _text.WordWrap = false;
+        _text.MaxLength = 0;
+        _text.Font = new Font("Consolas", 10);
+        _text.RightToLeft = RightToLeft.No;
+        clear.Click += (_, _) =>
         {
-            int index = i;
-            var tab = new TabPage(i == 0 ? "diagnostic.log" : "scanner_diagnostic.log") { Padding = new Padding(8) };
-            var clear = new Button { Text = UiText.Get("clear_log"), Dock = DockStyle.Bottom, Height = 38 };
-            _text[i] = new TextBox { Multiline = true, ReadOnly = true, Dock = DockStyle.Fill,
-                ScrollBars = ScrollBars.Both, WordWrap = false, MaxLength = 0,
-                Font = new Font("Consolas", 10), RightToLeft = RightToLeft.No };
-            clear.Click += (_, _) =>
-            {
-                try { DiagnosticLogStore.Clear(index == 1); RefreshLog(index); }
-                catch (Exception ex) { MessageBox.Show(this, ex.Message, UiText.Get("clear_log_failed")); }
-            };
-            tab.Controls.Add(_text[i]);
-            tab.Controls.Add(clear);
-            _tabs.TabPages.Add(tab);
-        }
-        Controls.Add(_tabs);
-        _tabs.SelectedIndexChanged += (_, _) => RefreshLog(_tabs.SelectedIndex);
-        _refresh.Tick += (_, _) => RefreshLog(_tabs.SelectedIndex);
-        Shown += (_, _) => { RefreshLog(0); _refresh.Start(); };
+            try { DiagnosticLogStore.Clear(); RefreshLog(); }
+            catch (Exception ex) { MessageBox.Show(this, ex.Message, UiText.Get("clear_log_failed")); }
+        };
+        Controls.Add(_text);
+        Controls.Add(clear);
+        _refresh.Tick += (_, _) => RefreshLog();
+        Shown += (_, _) => { RefreshLog(); _refresh.Start(); };
     }
-    private void RefreshLog(int index)
+    private void RefreshLog()
     {
-        if (index < 0) return;
         string content;
-        try { content = DiagnosticLogStore.Read(index == 1); }
+        try { content = DiagnosticLogStore.Read(); }
         catch (Exception ex) { content = UiText.Get("log_read_failed") + "\r\n" + ex.Message; }
-        var box = _text[index];
+        var box = _text;
         if (box.Text == content) return;
         int start = box.SelectionStart, length = box.SelectionLength;
         bool followEnd = start + length >= box.TextLength;

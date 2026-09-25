@@ -46,7 +46,7 @@ internal static class CrashLogger
             e.SetObserved();
         };
 
-        Write($"Application started. Version={AppInfo.Version}; portable={AppRuntime.IsPortable}; OS={Environment.OSVersion}; .NET={Environment.Version}; UI thread={Environment.CurrentManagedThreadId}");
+        Write($"Application started. Version={AppInfo.Version}; OS={Environment.OSVersion}; .NET={Environment.Version}; UI thread={Environment.CurrentManagedThreadId}");
     }
 
     public static void Write(string message)

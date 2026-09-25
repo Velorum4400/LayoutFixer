@@ -42,6 +42,24 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.4.0", new[]
+        {
+            T(
+                "Started the architecture redesign. Full-text correction remains active with its existing behavior.",
+                "Начата переработка архитектуры. Исправление всего текста остаётся активным с прежним поведением.",
+                "החל תכנון מחדש של הארכיטקטורה. תיקון הטקסט המלא נשאר פעיל בהתנהגות הקיימת.")
+        }, new[]
+        {
+            T(
+                "Removed the selected-text/last-word implementation, selection-restoration option and scanner runtime. Their main UI entries remain as disabled placeholders marked Temporarily unavailable.",
+                "Удалены реализация исправления выделения/последнего слова, опция сохранения выделения и подсистема сканера. Основные пункты интерфейса оставлены отключёнными с пометкой «Временно недоступно».",
+                "הוסרו מימוש תיקון הבחירה/המילה האחרונה, אפשרות שמירת הבחירה ותת-מערכת הסורק. רכיבי הממשק הראשיים נשארו מושבתים עם הסימון 'לא זמין זמנית'."),
+            T(
+                "Build scripts and CI now compile and test the application without producing installer or portable packages.",
+                "Скрипты сборки и CI теперь только компилируют и проверяют приложение, не создавая установщик и portable-пакет.",
+                "סקריפטי הבנייה ו-CI מקמפלים ובודקים את היישום בלי ליצור מתקין או חבילה ניידת.")
+        });
+
         AddVersion("v1.3.15", Array.Empty<string>(), new[]
         {
             T(

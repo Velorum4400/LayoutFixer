@@ -8,8 +8,7 @@ public static class StartupManager
     private const string RunKey =
         @"Software\Microsoft\Windows\CurrentVersion\Run";
 
-    private static string AppName =>
-        AppRuntime.IsPortable ? "LayoutFixerPortable" : "LayoutFixer";
+    private const string AppName = "LayoutFixer";
 
     public static void SetEnabled(bool enabled)
     {
