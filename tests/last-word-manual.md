@@ -1,4 +1,4 @@
-# Last-word replacement regression checks (1.3.13)
+# Last-word replacement regression checks (1.3.14)
 
 Run `dotnet run --project tests/Regression/Regression.csproj -c Release` for
 conversion, deletion-count safety, portable paths and native Edit/RichEdit
@@ -71,3 +71,8 @@ For 1.3.13, test Insert in ChatGPT when UIA last-word selection is unavailable.
 The fallback must not log a watchdog failure before its copy attempts finish.
 If Ctrl+C does not copy, expect a `trying Ctrl+Insert` log entry. A failed copy
 must leave the user's existing clipboard unchanged.
+
+For 1.3.14, type `можно ли в срфепзе` in ChatGPT with Russian active and press
+Insert at the end. Expect exactly `можно ли в chatgpt`; the log must show
+`target=English` and `Last-word replacement using keyboard selection`. Verify
+the Hebrew-with-digits case still uses the logical-caret/backspace path.

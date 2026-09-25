@@ -42,6 +42,14 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.3.14", Array.Empty<string>(), new[]
+        {
+            T(
+                "Fixed Russian/Hebrew text being sent to the next cyclic layout instead of English when the current layout matched the text. Plain LTR words in Chromium/Qt now use normal keyboard selection before direct Unicode replacement.",
+                "Исправлено преобразование русского/ивритского текста в следующую раскладку цикла вместо английской, когда текущая раскладка совпадала с текстом. Обычные LTR-слова в Chromium/Qt теперь используют стандартное клавиатурное выделение перед прямой Unicode-заменой.",
+                "תוקנה המרה של טקסט רוסי/עברי לפריסה הבאה במחזור במקום לאנגלית כאשר הפריסה הנוכחית תאמה לטקסט. מילים רגילות בכיוון LTR ב-Chromium/Qt משתמשות כעת בבחירת מקלדת רגילה לפני החלפת Unicode ישירה.")
+        });
+
         AddVersion("v1.3.13", Array.Empty<string>(), new[]
         {
             T(

@@ -60,23 +60,45 @@ public static class KeyboardLayout
         out IntPtr hkl) =>
         Installed.TryGetValue(language, out hkl);
 
-    public static bool TryGetNext(
-        KeyboardLanguage language,
-        out KeyboardLanguage next)
-    {
-        var available = AvailableLanguages;
+    public static bool TryGetCorrectionTarget(
+        KeyboardLanguage source,
+        KeyboardLanguage? current,
+        out KeyboardLanguage target) =>
+        TryChooseCorrectionTarget(source, current, AvailableLanguages, out target);
 
+    // A word made of Russian or Hebrew characters while that same layout is
+    // active normally means it was typed under the wrong layout. English is
+    // the intended target in that case; cycling directly to Hebrew/Russian
+    // corrupts common cases such as "срфепзе" -> "chatgpt".
+    private static bool TryChooseCorrectionTarget(
+        KeyboardLanguage source,
+        KeyboardLanguage? current,
+        IReadOnlyList<KeyboardLanguage> available,
+        out KeyboardLanguage target)
+    {
         if (available.Count < 2)
         {
-            next = language;
+            target = source;
             return false;
+        }
+
+        if (current.HasValue && current.Value != source && available.Contains(current.Value))
+        {
+            target = current.Value;
+            return true;
+        }
+
+        if (source != KeyboardLanguage.English && available.Contains(KeyboardLanguage.English))
+        {
+            target = KeyboardLanguage.English;
+            return true;
         }
 
         int index = -1;
 
         for (int i = 0; i < available.Count; i++)
         {
-            if (available[i] == language)
+            if (available[i] == source)
             {
                 index = i;
                 break;
@@ -85,11 +107,11 @@ public static class KeyboardLayout
 
         if (index < 0)
         {
-            next = available[0];
+            target = available[0];
             return true;
         }
 
-        next = available[(index + 1) % available.Count];
+        target = available[(index + 1) % available.Count];
         return true;
     }
 

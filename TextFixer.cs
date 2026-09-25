@@ -160,13 +160,7 @@ public static class TextFixer
             KeyboardLanguage fallback = currentLayout ?? KeyboardLanguage.English;
             from = LayoutConverter.DetectLanguage(original, fallback);
 
-            if (currentLayout.HasValue &&
-                currentLayout.Value != from &&
-                KeyboardLayout.IsAvailable(currentLayout.Value))
-            {
-                to = currentLayout.Value;
-            }
-            else if (!KeyboardLayout.TryGetNext(from, out to))
+            if (!KeyboardLayout.TryGetCorrectionTarget(from, currentLayout, out to))
             {
                 Log($"FAIL: fewer than two supported installed layouts; source={from}");
                 return false;
@@ -189,13 +183,23 @@ public static class TextFixer
 
             Log($"Converted sample={Sample(converted)}");
 
-            // Chromium and Qt can report the complete UIA range while their
-            // visual selection contains only a bidi run. Use the saved logical
-            // caret, delete the known word and send Unicode directly.
+            // Chromium and Qt can report a logical UIA range that differs from
+            // visual selection in bidirectional text. Plain LTR words use the
+            // editor's normal keyboard selection; Hebrew retains the verified
+            // logical-caret/backspace path.
             if (lastWordTarget != null)
             {
-                if (!DeleteLastWord(lastWordTarget, original, targetWindow))
+                bool keyboardSelection = !ContainsRightToLeftText(original);
+                if (keyboardSelection)
+                {
+                    SelectPreviousWordWithKeyboard();
+                    Thread.Sleep(20);
+                    Log("Last-word replacement using keyboard selection");
+                }
+                else if (!DeleteLastWord(lastWordTarget, original, targetWindow))
+                {
                     return false;
+                }
                 if (!CorrectionWorker.CanContinue || GetForegroundWindow() != targetWindow || GetFocusedWindow(targetWindow) != focusWindow)
                 {
                     Log("FAIL: focus changed before direct Unicode replacement");
@@ -576,6 +580,9 @@ public static class TextFixer
             (c >= '\u0410' && c <= '\u044f') || c == 'Ё' || c == 'ё' ||
             (c >= '\u05d0' && c <= '\u05ea') || c == '№');
     }
+
+    private static bool ContainsRightToLeftText(string text) =>
+        text.Any(c => (c >= '\u0590' && c <= '\u08ff') || (c >= '\ufb50' && c <= '\ufeff'));
 
     private static bool DeleteLastWord(LastWordTarget target, string original, IntPtr foreground)
     {

@@ -37,6 +37,22 @@ Check(LayoutConverter.Convert("Gamer's Nexus", KeyboardLanguage.English, Keyboar
     "ordinary standalone English conversion remains available");
 Check(typeof(TextFixer).GetMethod("SendUnicodeText", BindingFlags.NonPublic | BindingFlags.Static) != null,
     "direct Unicode replacement is available without clipboard publication");
+var chooseTarget = typeof(KeyboardLayout).GetMethod("TryChooseCorrectionTarget",
+    BindingFlags.NonPublic | BindingFlags.Static)!;
+var layouts = (IReadOnlyList<KeyboardLanguage>)new[]
+    { KeyboardLanguage.English, KeyboardLanguage.Russian, KeyboardLanguage.Hebrew };
+object?[] russianTarget = { KeyboardLanguage.Russian, KeyboardLanguage.Russian, layouts, null };
+Check((bool)chooseTarget.Invoke(null, russianTarget)! && (KeyboardLanguage)russianTarget[3]! == KeyboardLanguage.English,
+    "Russian text under Russian layout targets English");
+object?[] hebrewTarget = { KeyboardLanguage.Hebrew, KeyboardLanguage.Hebrew, layouts, null };
+Check((bool)chooseTarget.Invoke(null, hebrewTarget)! && (KeyboardLanguage)hebrewTarget[3]! == KeyboardLanguage.English,
+    "Hebrew text under Hebrew layout targets English");
+object?[] typedRussianTarget = { KeyboardLanguage.Russian, KeyboardLanguage.English, layouts, null };
+Check((bool)chooseTarget.Invoke(null, typedRussianTarget)! && (KeyboardLanguage)typedRussianTarget[3]! == KeyboardLanguage.English,
+    "current layout remains target when it differs from text");
+var containsRtl = typeof(TextFixer).GetMethod("ContainsRightToLeftText", BindingFlags.NonPublic | BindingFlags.Static)!;
+Check(!(bool)containsRtl.Invoke(null, new object[] { "срфепзе" })!, "Russian word uses keyboard selection");
+Check((bool)containsRtl.Invoke(null, new object[] { "הקךםרוצ" })!, "Hebrew word keeps logical-caret path");
 Check(typeof(TextFixer).Assembly.GetType("LayoutFixer.SettingsForm") == null,
     "unused legacy settings form is removed");
 

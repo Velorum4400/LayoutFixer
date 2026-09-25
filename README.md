@@ -2,6 +2,14 @@
 
 Windows tray utility for correcting text typed in the wrong keyboard layout.
 
+## 1.3.14 — correct target and selection for ChatGPT LTR words
+
+When Russian or Hebrew text is under the matching active layout, its correction
+now targets English instead of advancing to the next cyclic layout. Thus
+`срфепзе` converts to `chatgpt`. In Chromium/Qt editors, plain LTR last words
+use ordinary keyboard selection before direct Unicode replacement, avoiding
+mixed UIA and rendered-selection behavior.
+
 ## 1.3.13 — resilient ChatGPT last-word fallback
 
 The watchdog now allows the complete bounded keyboard-copy fallback to finish.
