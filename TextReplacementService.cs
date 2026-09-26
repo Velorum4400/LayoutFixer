@@ -66,6 +66,7 @@ internal static class TextReplacementService
                 return Fail("active window changed before Ctrl+C", targetWindow);
 
             uint sequenceBeforeCopy = ClipboardService.SequenceNumber;
+            var copyDispatchTimer = Stopwatch.StartNew();
             if (!KeyboardInputService.Copy())
             {
                 Log("FAIL: Ctrl+C SendInput failed");
@@ -83,6 +84,8 @@ internal static class TextReplacementService
             }
             ownsClipboard = true;
             Log($"Copy result: success=True, textLength={sourceText.Length}");
+            ClipboardDiagnostics.ObserveAfterCopy(copyDispatchTimer, sequenceBeforeCopy,
+                ownedSequence, copyWait);
 
             if (GetForegroundWindow() != targetWindow)
                 return Fail("active window changed after text acquisition", targetWindow);

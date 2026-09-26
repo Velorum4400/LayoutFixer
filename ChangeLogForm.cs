@@ -42,6 +42,20 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.5.2", new[]
+        {
+            T(
+                "Added temporary Clipboard diagnostics for post-copy sequence changes.",
+                "Добавлена временная диагностика изменений Clipboard после копирования.",
+                "נוספה אבחנה זמנית לשינויים בלוח לאחר העתקה.")
+        }, new[]
+        {
+            T(
+                "The diagnostic log now captures a 450 ms post-Ctrl+C timeline with sequence numbers, owners, open Clipboard windows, formats, Unicode length and a privacy-safe text hash.",
+                "Диагностический лог теперь записывает 450-мс шкалу после Ctrl+C: sequence number, владельцев, открытые окна Clipboard, formats, длину Unicode и безопасный для приватности hash текста.",
+                "יומן האבחון מתעד כעת ציר זמן של 450 אלפיות השנייה לאחר Ctrl+C: מספרי רצף, בעלים, חלונות לוח פתוחים, פורמטים, אורך Unicode ו-hash טקסט בטוח לפרטיות.")
+        });
+
         AddVersion("v1.5.1", new[]
         {
             T(
