@@ -40,6 +40,12 @@ internal static class TextReplacementService
                 return false;
             }
             Log($"Layouts: source={sourceLayout.DisplayName} (0x{sourceLayout.Handle.ToInt64():X}), target={targetLayout.DisplayName} (0x{targetLayout.Handle.ToInt64():X})");
+            if (!KeyboardLayoutService.TryGetMap(sourceLayout, out KeyboardLayoutMap sourceMap) ||
+                !KeyboardLayoutService.TryGetMap(targetLayout, out KeyboardLayoutMap targetMap))
+            {
+                Log("FAIL: source or target keyboard layout map is unavailable");
+                return false;
+            }
 
             var clipboardTimer = Stopwatch.StartNew();
             if (!ClipboardService.TryCapture(out snapshot))
@@ -86,8 +92,8 @@ internal static class TextReplacementService
                 return false;
             }
 
-            string convertedText = LayoutConverter.Convert(sourceText, sourceLayout, targetLayout);
-            Log($"Conversion result: success=True, sourceLength={sourceText.Length}, convertedLength={convertedText.Length}");
+            string convertedText = LayoutConverter.Convert(sourceText, sourceMap, targetMap, out int unchangedCount);
+            Log($"Conversion result: success=True, sourceLength={sourceText.Length}, convertedLength={convertedText.Length}, unchanged={unchangedCount}");
 
             if (GetForegroundWindow() != targetWindow)
                 return Fail("active window changed before Clipboard write", targetWindow);
@@ -172,3 +178,4 @@ internal static class TextReplacementService
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
 }
+

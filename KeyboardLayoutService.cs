@@ -13,6 +13,7 @@ public static class KeyboardLayoutService
     private const uint WM_INPUTLANGCHANGEREQUEST = 0x0050;
     private static readonly object Sync = new();
     private static KeyboardLayoutInfo[] _layouts = Array.Empty<KeyboardLayoutInfo>();
+    private static Dictionary<IntPtr, KeyboardLayoutMap> _maps = new();
 
     public static IReadOnlyList<KeyboardLayoutInfo> Layouts
     {
@@ -40,7 +41,17 @@ public static class KeyboardLayoutService
             if (refreshed.Length == 0)
                 return false;
 
-            lock (Sync) _layouts = refreshed;
+            Dictionary<IntPtr, KeyboardLayoutMap> existingMaps;
+            lock (Sync) existingMaps = new Dictionary<IntPtr, KeyboardLayoutMap>(_maps);
+            foreach (KeyboardLayoutInfo layout in refreshed)
+                if (!existingMaps.ContainsKey(layout.Handle))
+                    existingMaps[layout.Handle] = KeyboardLayoutMap.Build(layout);
+
+            lock (Sync)
+            {
+                _layouts = refreshed;
+                _maps = existingMaps;
+            }
             return true;
         }
         catch (Exception ex)
@@ -91,6 +102,12 @@ public static class KeyboardLayoutService
         }
         target = snapshot[(index + 1) % snapshot.Length];
         return true;
+    }
+
+    public static bool TryGetMap(KeyboardLayoutInfo layout, out KeyboardLayoutMap map)
+    {
+        lock (Sync)
+            return _maps.TryGetValue(layout.Handle, out map!);
     }
 
     public static bool SwitchLayout(IntPtr targetWindow, KeyboardLayoutInfo target)
@@ -162,3 +179,4 @@ public static class KeyboardLayoutService
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetGUIThreadInfo(uint idThread, ref GUITHREADINFO info);
 }
+

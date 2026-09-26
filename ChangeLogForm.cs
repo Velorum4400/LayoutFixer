@@ -42,6 +42,20 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.5.1", new[]
+        {
+            T(
+                "Keyboard layouts are now mapped once at startup from their actual ToUnicodeExW behavior, including Shift and AltGr combinations.",
+                "Раскладки клавиатуры теперь один раз при запуске строятся по их фактическому поведению ToUnicodeExW, включая комбинации Shift и AltGr.",
+                "מפות פריסת המקלדת נבנות כעת פעם אחת בהפעלה מההתנהגות בפועל של ToUnicodeExW, כולל שילובי Shift ו-AltGr.")
+        }, new[]
+        {
+            T(
+                "Conversion now transfers physical scan code plus modifiers instead of relying on VkKeyScanExW. Hebrew period correctly follows its physical key to Russian period.",
+                "Преобразование теперь переносит физический scan code вместе с модификаторами вместо зависимости от VkKeyScanExW. Ивритская точка корректно переходит по физической клавише в русскую точку.",
+                "ההמרה מעבירה כעת scan code פיזי יחד עם מקשים משנים במקום להסתמך על VkKeyScanExW. נקודה עברית עוברת נכון באמצעות המקש הפיזי לנקודה רוסית.")
+        });
+
         AddVersion("v1.5.0", new[]
         {
             T(
@@ -503,3 +517,4 @@ public sealed class ChangeLogForm : Form
         _changes.AppendText("────────────────────────────────────────────────────────");
     }
 }
+

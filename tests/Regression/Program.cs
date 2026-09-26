@@ -13,7 +13,13 @@ Check(KeyboardLayoutService.RefreshLayouts(), "installed layouts refresh");
 IReadOnlyList<KeyboardLayoutInfo> layouts = KeyboardLayoutService.Layouts;
 Check(layouts.Count > 0, "installed layout list retained");
 Check(layouts.Select(x => x.Handle).Distinct().Count() == layouts.Count, "layout handles are unique");
-Check(LayoutConverter.Convert("text \t\r\n", layouts[0], layouts[0]) == "text \t\r\n",
+KeyboardLayoutMap Map(KeyboardLayoutInfo layout)
+{
+    Check(KeyboardLayoutService.TryGetMap(layout, out KeyboardLayoutMap map),
+        $"layout map is cached for {layout.ShortName}");
+    return map;
+}
+Check(LayoutConverter.Convert("text \t\r\n", Map(layouts[0]), Map(layouts[0]), out _) == "text \t\r\n",
     "same-layout conversion preserves text");
 if (layouts.Count > 1)
 {
@@ -21,7 +27,7 @@ if (layouts.Count > 1)
           second.Handle == layouts[1].Handle, "next layout follows saved order");
     Check(KeyboardLayoutService.TryGetNext(layouts[^1], out KeyboardLayoutInfo first) &&
           first.Handle == layouts[0].Handle, "last layout wraps to first");
-    Check(LayoutConverter.Convert(" \t\r\n", layouts[0], layouts[1]) == " \t\r\n",
+    Check(LayoutConverter.Convert(" \t\r\n", Map(layouts[0]), Map(layouts[1]), out _) == " \t\r\n",
         "whitespace survives cross-layout conversion");
 }
 KeyboardLayoutInfo? english = layouts.FirstOrDefault(x => (x.LanguageId & 0x03ff) == 0x09);
@@ -29,14 +35,28 @@ KeyboardLayoutInfo? russian = layouts.FirstOrDefault(x => (x.LanguageId & 0x03ff
 KeyboardLayoutInfo? hebrew = layouts.FirstOrDefault(x => (x.LanguageId & 0x03ff) == 0x0d);
 if (english != null && russian != null)
 {
-    Check(LayoutConverter.Convert("ghbdtn", english, russian) == "привет",
+    Check(LayoutConverter.Convert("ghbdtn", Map(english), Map(russian), out _) == "привет",
         "physical key conversion English to Russian");
-    Check(LayoutConverter.Convert("#", english, russian) == "№",
+    Check(LayoutConverter.Convert("#", Map(english), Map(russian), out _) == "№",
         "Shift punctuation conversion English to Russian");
 }
 if (english != null && hebrew != null)
-    Check(LayoutConverter.Convert("akuo", english, hebrew) == "שלום",
+    Check(LayoutConverter.Convert("akuo", Map(english), Map(hebrew), out _) == "שלום",
         "physical key conversion English to Hebrew");
+if (english != null && russian != null && hebrew != null)
+{
+    const string cycleSource = "Привет, я исправленный текст. Все ли прошло так, как надо? Были ли проблемы с чем-то?";
+    string englishText = LayoutConverter.Convert(cycleSource, Map(russian), Map(english), out _);
+    string hebrewText = LayoutConverter.Convert(englishText, Map(english), Map(hebrew), out _);
+    string cycleResult = LayoutConverter.Convert(hebrewText, Map(hebrew), Map(russian), out _);
+    Check(cycleResult == cycleSource, "Russian-English-Hebrew-Russian cycle is lossless");
+    Check(LayoutConverter.Convert(".", Map(russian), Map(english), out _) == "/" &&
+          LayoutConverter.Convert("/", Map(english), Map(hebrew), out _) == "." &&
+          LayoutConverter.Convert(".", Map(hebrew), Map(russian), out _) == ".",
+        "Hebrew period follows scan code 0x35 to Russian period");
+    Check(LayoutConverter.Convert("😀\tunsupported\r\n", Map(english), Map(russian), out _) == "😀\tгтыгззщкеув\r\n",
+        "unsupported Unicode and whitespace are preserved");
+}
 
 Check(typeof(TextReplacementService).GetMethod("TryReplaceAllText") != null,
     "text replacement coordinator is available");
@@ -115,3 +135,4 @@ release.Set();
 Check(SpinWait.SpinUntil(() => !(bool)busy.GetValue(null)!, 2000), "worker releases operation guard");
 
 Console.WriteLine($"{passed} regression checks passed.");
+
