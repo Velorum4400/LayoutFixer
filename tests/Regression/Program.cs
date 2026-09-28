@@ -89,6 +89,10 @@ CheckLastWord("hello,", 0, 6, 0, false, "punctuation remains part of last word")
 CheckLastWord("hello!!!", 0, 8, 0, false, "multiple punctuation remains part of last word");
 CheckLastWord("one hello,", 4, 6, 0, true, "whitespace boundary precedes last fragment");
 CheckLastWord("one hello,   ", 4, 6, 3, true, "trailing whitespace is excluded from last fragment");
+LastWordSelectionAnalysis whitespaceOnly = LastWordSelectionAnalyzer.Analyze(" ");
+Check(!whitespaceOnly.HasFragment && !whitespaceOnly.BoundaryWhitespaceFound &&
+      whitespaceOnly.TrailingWhitespaceLength == 1,
+    "trailing whitespace alone is not a last-word boundary");
 CheckLastWord("оченьдлинноеслово", 0, 17, 0, false, "long Unicode last word is recognized");
 Check(typeof(HotkeyService).GetEvents().Any(x => x.Name == "Pressed"),
     "hotkey service exposes only the trigger event");
