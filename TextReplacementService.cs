@@ -222,18 +222,29 @@ internal static class TextReplacementService
 
     private static bool TrySelectLastNonWhitespaceFragment(TextReplacementOperation operation)
     {
+        if (!TryProbeLastWordDirection(operation, out LastWordSearchDirection direction,
+                out string selection))
+        {
+            Log("FAIL: no LastWord text found in either direction");
+            return false;
+        }
+
+        Log($"LastWord search direction selected: {direction}");
         string? previousSelection = null;
         for (int iteration = 1; iteration <= MaxLastWordSearchIterations; iteration++)
         {
             if (GetForegroundWindow() != operation.TargetWindow)
                 return Fail("active window changed during LastWord search", operation.TargetWindow);
-            if (!KeyboardInputService.SelectPreviousWord())
-                return false;
-            Log($"LastWord search iteration={iteration}: Ctrl+Shift+Left sent");
-            Thread.Sleep(15);
+            if (iteration > 1)
+            {
+                if (!KeyboardInputService.SelectPreviousWord(direction))
+                    return false;
+                Log($"LastWord search iteration={iteration}: Ctrl+Shift+{direction} sent");
+                Thread.Sleep(15);
 
-            if (!TryCopySearchSelection(operation, out string selection))
-                return false;
+                if (!TryCopySearchSelection(operation, out selection))
+                    return false;
+            }
 
             LastWordSelectionAnalysis analysis = LastWordSelectionAnalyzer.Analyze(selection);
             Log($"LastWord search iteration={iteration}, selectionLength={selection.Length}, boundaryWhitespaceFound={analysis.BoundaryWhitespaceFound}, trailingWhitespace={analysis.TrailingWhitespaceLength}");
@@ -242,7 +253,7 @@ internal static class TextReplacementService
                 previousSelection != null && string.Equals(previousSelection, selection, StringComparison.Ordinal);
             if (analysis.BoundaryWhitespaceFound || reachedStartOfField)
             {
-                if (!SelectExactLastWordFragment(selection, analysis))
+                if (!SelectExactLastWordFragment(selection, analysis, direction))
                     return false;
                 string boundary = analysis.BoundaryWhitespaceFound ? "Whitespace" : "StartOfField";
                 Log($"LastWord search completed: iterations={iteration}, fragmentLength={analysis.FragmentLength}, trailingWhitespace={analysis.TrailingWhitespaceLength}, boundary={boundary}");
@@ -253,6 +264,74 @@ internal static class TextReplacementService
         }
 
         Log($"FAIL: LastWord boundary was not found within {MaxLastWordSearchIterations} iterations");
+        return false;
+    }
+
+    private static bool TryProbeLastWordDirection(TextReplacementOperation operation,
+        out LastWordSearchDirection selectedDirection, out string selection)
+    {
+        selection = string.Empty;
+        foreach (LastWordSearchDirection direction in new[]
+                 { LastWordSearchDirection.Left, LastWordSearchDirection.Right })
+        {
+            Log($"LastWord direction probe: direction={direction}");
+            if (!KeyboardInputService.SelectPreviousWord(direction))
+            {
+                Log($"LastWord direction probe: {direction} SendInput failed");
+                selectedDirection = default;
+                return false;
+            }
+            Thread.Sleep(15);
+
+            string marker = $"LayoutFixer_LastWordProbe_{Guid.NewGuid():N}";
+            if (!ClipboardService.TrySetText(marker, out uint markerSequence))
+            {
+                Log("FAIL: LastWord probe marker could not be written to Clipboard");
+                selectedDirection = default;
+                return false;
+            }
+            operation.LastWordSearchClipboardSequence = markerSequence;
+            operation.LastWordSearchClipboardContainsSourceText = true;
+            Log("LastWord probe marker written");
+
+            var copyTimer = Stopwatch.StartNew();
+            if (!KeyboardInputService.Copy())
+            {
+                Log("FAIL: LastWord probe Ctrl+C SendInput failed");
+                selectedDirection = default;
+                return false;
+            }
+
+            if (ClipboardService.WaitForStableCopy(markerSequence, copyTimer,
+                    out ClipboardCopyResult copyResult))
+            {
+                if (copyResult.Text.Length == 0 || string.Equals(copyResult.Text, marker,
+                        StringComparison.Ordinal))
+                {
+                    Log($"LastWord probe result: indeterminate, elapsed={copyResult.ElapsedMilliseconds} ms");
+                    selectedDirection = default;
+                    return false;
+                }
+
+                RecordLastWordSearchCopy(operation, copyResult);
+                selection = copyResult.Text;
+                Log($"LastWord probe result: TextCopied, selectionLength={selection.Length}");
+                selectedDirection = direction;
+                return true;
+            }
+
+            if (ClipboardService.IsCurrentSequence(markerSequence))
+            {
+                Log("LastWord probe result: NoCopiedSelection");
+                continue;
+            }
+
+            Log($"LastWord probe result: indeterminate, elapsed={copyResult.ElapsedMilliseconds} ms");
+            selectedDirection = default;
+            return false;
+        }
+
+        selectedDirection = default;
         return false;
     }
 
@@ -275,6 +354,14 @@ internal static class TextReplacementService
         }
 
         selection = copyResult.Text;
+        RecordLastWordSearchCopy(operation, copyResult);
+
+        return true;
+    }
+
+    private static void RecordLastWordSearchCopy(TextReplacementOperation operation,
+        ClipboardCopyResult copyResult)
+    {
         operation.LastObservedClipboardSequence = copyResult.LastSequence;
         if (copyResult.NewExternalSnapshot != null)
         {
@@ -282,45 +369,48 @@ internal static class TextReplacementService
             operation.RestoreSnapshotSequence = copyResult.NewExternalSnapshotSequence;
         }
 
+        operation.LastWordSearchClipboardContainsSourceText = copyResult.ClipboardContainsSourceText;
         if (copyResult.ClipboardContainsSourceText)
         {
             operation.LastWordSearchClipboardSequence = copyResult.LastSequence;
-            operation.LastWordSearchClipboardContainsSourceText = true;
             Log($"LastWord search Copy retained until search completes: sequence={copyResult.LastSequence}");
         }
-        else
-        {
-            operation.LastWordSearchClipboardContainsSourceText = false;
-        }
-
-        return true;
     }
 
     private static bool SelectExactLastWordFragment(string temporarySelection,
-        LastWordSelectionAnalysis analysis)
+        LastWordSelectionAnalysis analysis, LastWordSearchDirection direction)
     {
-        int prefixSteps = LastWordSelectionAnalyzer.CountTextElements(
-            temporarySelection[..analysis.FragmentStart]);
         int fragmentSteps = LastWordSelectionAnalyzer.CountTextElements(
             temporarySelection.Substring(analysis.FragmentStart, analysis.FragmentLength));
         if (fragmentSteps == 0)
             return false;
-        if (!KeyboardInputService.CollapseSelectionToStart())
+
+        if (direction == LastWordSearchDirection.Left)
         {
-            Log("FAIL: LastWord search could not collapse temporary selection");
+            int trailingSteps = LastWordSelectionAnalyzer.CountTextElements(
+                temporarySelection[(analysis.FragmentStart + analysis.FragmentLength)..]);
+            if (!KeyboardInputService.CollapseSelectionToEnd() ||
+                !KeyboardInputService.MoveCaretLeft(trailingSteps) ||
+                !KeyboardInputService.SelectCharactersLeft(fragmentSteps))
+            {
+                Log("FAIL: LastWord search could not create exact Left fragment selection");
+                return false;
+            }
+            Log($"LastWord exact selection sent: direction=Left, fragmentSteps={fragmentSteps}");
+            Thread.Sleep(15);
+            return true;
+        }
+
+        int prefixSteps = LastWordSelectionAnalyzer.CountTextElements(
+            temporarySelection[..analysis.FragmentStart]);
+        if (!KeyboardInputService.CollapseSelectionToStart() ||
+            !KeyboardInputService.MoveCaretRight(prefixSteps) ||
+            !KeyboardInputService.SelectCharactersRight(fragmentSteps))
+        {
+            Log("FAIL: LastWord search could not create exact Right fragment selection");
             return false;
         }
-        if (!KeyboardInputService.MoveCaretRight(prefixSteps))
-        {
-            Log("FAIL: LastWord search could not collapse temporary selection");
-            return false;
-        }
-        if (!KeyboardInputService.SelectCharactersRight(fragmentSteps))
-        {
-            Log("FAIL: LastWord search could not create exact fragment selection");
-            return false;
-        }
-        Log($"LastWord exact selection sent: prefixSteps={prefixSteps}, fragmentSteps={fragmentSteps}");
+        Log($"LastWord exact selection sent: direction=Right, prefixSteps={prefixSteps}, fragmentSteps={fragmentSteps}");
         Thread.Sleep(15);
         return true;
     }
