@@ -24,6 +24,8 @@ public sealed class ScannerInputService : IDisposable
     private AppSettings _settings;
     private bool _identifying;
     private IntPtr _identifiedDevice;
+    private DateTime _lastEnglishSwitchRequestUtc;
+    private const int ScannerSessionMilliseconds = 300;
     public event Action<ScannerDeviceInfo>? ScannerIdentified;
 
     public ScannerInputService(AppSettings settings) { _settings = settings; _window = new RawWindow(this); }
@@ -55,15 +57,14 @@ public sealed class ScannerInputService : IDisposable
             }
             if (!_settings.ScannerEnabled || !Matches(device)) return;
             IntPtr target = GetForegroundWindow();
-            KeyboardLayoutDiagnostic layoutDiagnostic = KeyboardLayoutService.GetLayoutDiagnostic(target);
-            ScannerDiagnosticLog.Write($"Scanner RawInput detected target=0x{target.ToInt64():X}, targetThreadId={layoutDiagnostic.TargetThreadId}, layoutFixerThreadId={layoutDiagnostic.LayoutFixerThreadId}, targetThreadLayout=0x{layoutDiagnostic.TargetThreadLayout.ToInt64():X}, layoutFixerThreadLayout=0x{layoutDiagnostic.LayoutFixerThreadLayout.ToInt64():X}");
-            if (target == IntPtr.Zero || !KeyboardLayoutService.TryGetCurrentLayout(target, out KeyboardLayoutInfo current)) return;
-            ScannerDiagnosticLog.Write($"Scanner RawInput detected device='{device.DevicePath}', target=0x{target.ToInt64():X}, elapsedFromRawInput={timer.ElapsedMilliseconds} ms");
-            if ((current.LanguageId & 0x03ff) == 0x09) { ScannerDiagnosticLog.Write("Scanner current layout: English; switchRequired=False"); return; }
+            if (target == IntPtr.Zero) return;
+            if ((DateTime.UtcNow - _lastEnglishSwitchRequestUtc).TotalMilliseconds < ScannerSessionMilliseconds) return;
             if (!KeyboardLayoutService.TryGetEnglish(out KeyboardLayoutInfo english)) { ScannerDiagnosticLog.Write("FAIL: English keyboard layout is not available"); return; }
             if (GetForegroundWindow() != target) { ScannerDiagnosticLog.Write("Scanner switch skipped: foreground window changed"); return; }
+            _lastEnglishSwitchRequestUtc = DateTime.UtcNow;
+            ScannerDiagnosticLog.Write($"Scanner RawInput detected target=0x{target.ToInt64():X}, EnglishLayout=0x{english.Handle.ToInt64():X}, elapsedFromRawInput={timer.ElapsedMilliseconds} ms");
             bool requested = KeyboardLayoutService.SwitchLayout(target, english);
-            ScannerDiagnosticLog.Write($"Scanner English layout switch requested: success={requested}, elapsedFromRawInput={timer.ElapsedMilliseconds} ms");
+            ScannerDiagnosticLog.Write($"Scanner English layout switch requested: success={requested}, switchMethod=WM_INPUTLANGCHANGEREQUEST, elapsedFromRawInput={timer.ElapsedMilliseconds} ms");
         }
         catch (Exception ex) { ScannerDiagnosticLog.Write($"Scanner RawInput failed: {ex.GetType().Name}: {ex.Message}"); }
         finally { Marshal.FreeHGlobal(buffer); }
