@@ -55,6 +55,8 @@ public sealed class ScannerInputService : IDisposable
             }
             if (!_settings.ScannerEnabled || !Matches(device)) return;
             IntPtr target = GetForegroundWindow();
+            KeyboardLayoutDiagnostic layoutDiagnostic = KeyboardLayoutService.GetLayoutDiagnostic(target);
+            ScannerDiagnosticLog.Write($"Scanner RawInput detected target=0x{target.ToInt64():X}, targetThreadId={layoutDiagnostic.TargetThreadId}, layoutFixerThreadId={layoutDiagnostic.LayoutFixerThreadId}, targetThreadLayout=0x{layoutDiagnostic.TargetThreadLayout.ToInt64():X}, layoutFixerThreadLayout=0x{layoutDiagnostic.LayoutFixerThreadLayout.ToInt64():X}");
             if (target == IntPtr.Zero || !KeyboardLayoutService.TryGetCurrentLayout(target, out KeyboardLayoutInfo current)) return;
             ScannerDiagnosticLog.Write($"Scanner RawInput detected device='{device.DevicePath}', target=0x{target.ToInt64():X}, elapsedFromRawInput={timer.ElapsedMilliseconds} ms");
             if ((current.LanguageId & 0x03ff) == 0x09) { ScannerDiagnosticLog.Write("Scanner current layout: English; switchRequired=False"); return; }
