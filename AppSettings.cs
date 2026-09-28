@@ -16,6 +16,11 @@ public sealed class AppSettings
     public string LastWordHotkey { get; set; } = "Insert";
     public bool SelectedTextEnabled { get; set; } = true;
     public string SelectedTextHotkey { get; set; } = "Pause";
+    public bool ScannerEnabled { get; set; }
+    public string ScannerDevicePath { get; set; } = "";
+    public string ScannerVendorId { get; set; } = "";
+    public string ScannerProductId { get; set; } = "";
+    public string ScannerDisplayName { get; set; } = "";
 
     private static string SettingsPath => AppRuntime.GetDataPath("settings.json");
     public static AppSettings CreateDefault() => new();
@@ -61,6 +66,11 @@ public sealed class AppSettings
         LastWordHotkey = defaults.LastWordHotkey;
         SelectedTextEnabled = defaults.SelectedTextEnabled;
         SelectedTextHotkey = defaults.SelectedTextHotkey;
+        ScannerEnabled = defaults.ScannerEnabled;
+        ScannerDevicePath = defaults.ScannerDevicePath;
+        ScannerVendorId = defaults.ScannerVendorId;
+        ScannerProductId = defaults.ScannerProductId;
+        ScannerDisplayName = defaults.ScannerDisplayName;
         SettingsSchemaVersion = defaults.SettingsSchemaVersion;
     }
 
