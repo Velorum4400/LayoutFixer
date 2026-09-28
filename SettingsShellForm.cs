@@ -46,6 +46,9 @@ public sealed class SettingsShellForm : Form
     private readonly ModernButton _clearLog = new();
 
     private readonly Label _scannerUnavailable = new();
+    private readonly ScannerInputService _scanner;
+    private readonly CheckBox _scannerEnabled = new();
+    private readonly ModernButton _detectScanner = new();
 
     private readonly ModernButton _defaults = new();
     private readonly ModernButton _save = new();
@@ -53,9 +56,10 @@ public sealed class SettingsShellForm : Form
     private bool _updatingLanguage;
     private int _activePage;
 
-    public SettingsShellForm(AppSettings settings)
+    public SettingsShellForm(AppSettings settings, ScannerInputService scanner)
     {
         _settings = settings;
+        _scanner = scanner;
 
         UiText.Language = settings.Language;
 
@@ -71,6 +75,7 @@ public sealed class SettingsShellForm : Form
         BuildCorrectionPage();
         BuildGeneralPage();
         BuildScannerPage();
+        _scanner.ScannerIdentified += OnScannerIdentified;
 
         ApplyLanguage();
         ShowPage(0);
@@ -260,11 +265,16 @@ public sealed class SettingsShellForm : Form
     {
         CardPanel card = MakeCard();
         card.Dock = DockStyle.Fill;
-        _scannerUnavailable.SetBounds(34, 40, 800, 80);
+        _scannerEnabled.SetBounds(34, 32, 500, 32);
+        _scannerEnabled.Checked = _settings.ScannerEnabled;
+        _scannerUnavailable.SetBounds(34, 84, 800, 80);
         _scannerUnavailable.Font = new Font("Segoe UI", 13F, FontStyle.Bold);
         _scannerUnavailable.ForeColor = Color.FromArgb(178, 92, 20);
         _scannerUnavailable.TextAlign = ContentAlignment.TopLeft;
-        card.Controls.Add(_scannerUnavailable);
+        _detectScanner.SetBounds(34, 180, 220, 42);
+        _detectScanner.Primary = true;
+        _detectScanner.Click += (_, _) => { _scanner.BeginIdentification(); _scannerUnavailable.Text = UiText.Get("scanner_waiting"); };
+        card.Controls.AddRange(new Control[] { _scannerEnabled, _scannerUnavailable, _detectScanner });
         _scannerPage.Controls.Add(card);
     }
 
@@ -422,6 +432,7 @@ public sealed class SettingsShellForm : Form
         _settings.LastWordHotkey = word;
         _settings.SelectedTextEnabled = _selected.Checked;
         _settings.SelectedTextHotkey = selected;
+        _settings.ScannerEnabled = _scannerEnabled.Checked;
         _settings.StartWithWindows = _startup.Checked;
         _settings.Language = (_language.SelectedItem as LanguageItem)?.Code ?? "en";
 
@@ -431,6 +442,20 @@ public sealed class SettingsShellForm : Form
 
         DialogResult = DialogResult.OK;
         Close();
+    }
+
+    private void OnScannerIdentified(ScannerDeviceInfo device)
+    {
+        if (IsDisposed) return;
+        BeginInvoke(() =>
+        {
+            _settings.ScannerDevicePath = device.DevicePath;
+            _settings.ScannerVendorId = device.VendorId;
+            _settings.ScannerProductId = device.ProductId;
+            _settings.ScannerDisplayName = device.DisplayName;
+            _scannerEnabled.Checked = true;
+            _scannerUnavailable.Text = $"{UiText.Get("scanner_detected")}: {device.DisplayName}";
+        });
     }
 
     private void RestoreDefaults()
@@ -474,6 +499,8 @@ public sealed class SettingsShellForm : Form
         _clearLog.Text = UiText.Get("open_log");
 
         _scannerUnavailable.Text = UiText.Get("temporarily_unavailable");
+        _scannerEnabled.Text = UiText.Get("scanner_enable");
+        _detectScanner.Text = UiText.Get("scanner_start_detect");
 
         _defaults.Text = UiText.Get("defaults");
         _save.Text = UiText.Get("save");
@@ -522,6 +549,8 @@ public sealed class SettingsShellForm : Form
     {
         if (disposing)
         {
+            _scanner.ScannerIdentified -= OnScannerIdentified;
+            _scanner.CancelIdentification();
             _logo.Image?.Dispose();
             Icon?.Dispose();
         }
