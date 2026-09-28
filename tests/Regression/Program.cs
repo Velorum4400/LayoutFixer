@@ -66,6 +66,12 @@ Check(typeof(KeyboardInputService).GetMethod("SelectAll") != null,
     "SendInput chords are isolated in KeyboardInputService");
 Check(typeof(KeyboardInputService).GetMethod("SelectPreviousWord") != null,
     "last-word selection chord is isolated in KeyboardInputService");
+Check(KeyboardInputService.GetKeyboardEventFlags(0x25, false) == 0x0001 &&
+      KeyboardInputService.GetKeyboardEventFlags(0x25, true) == 0x0003,
+    "extended Left key uses KEYEVENTF_EXTENDEDKEY for down and up");
+Check(KeyboardInputService.GetKeyboardEventFlags(0x10, false) == 0 &&
+      KeyboardInputService.GetKeyboardEventFlags(0x11, true) == 0x0002,
+    "Ctrl and Shift retain ordinary keyboard flags");
 Check(typeof(HotkeyService).GetEvents().Any(x => x.Name == "Pressed"),
     "hotkey service exposes only the trigger event");
 Check(typeof(TextReplacementService).Assembly.GetType("LayoutFixer.TextFixer") == null,

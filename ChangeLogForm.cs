@@ -42,6 +42,14 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.7.2", Array.Empty<string>(), new[]
+        {
+            T(
+                "Fixed the synthetic Ctrl+Shift+Left used by Last Word correction: extended navigation keys now receive the required SendInput extended-key flag.",
+                "Исправлена синтетическая комбинация Ctrl+Shift+Left режима последнего слова: extended-клавиши навигации теперь получают необходимый extended-key флаг SendInput.",
+                "תוקן Ctrl+Shift+Left הסינתטי של תיקון המילה האחרונה: מקשי ניווט extended מקבלים כעת את דגל ה-extended-key הנדרש של SendInput.")
+        });
+
         AddVersion("v1.7.1", Array.Empty<string>(), new[]
         {
             T(

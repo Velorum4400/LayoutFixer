@@ -18,6 +18,8 @@ do not match the default one-key Last Word hotkey.
 The default full-text hotkey is Ctrl+Shift. Because this is a modifier-only
 combination, LayoutFixer observes it without suppressing physical modifier
 events; shortcuts such as Ctrl+Shift+Left continue to reach the active app.
+The synthetic Ctrl+Shift+Left used for Last Word sends the required extended-key
+flag for the navigation key.
 
 At startup, LayoutFixer stores the Windows keyboard layouts in their system
 order. Each successful correction advances exactly one position in that list

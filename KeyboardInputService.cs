@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 namespace LayoutFixer;
@@ -12,7 +13,15 @@ internal static class KeyboardInputService
     private const int VK_SHIFT = 0x10;
     private const int VK_LEFT = 0x25;
     private const uint INPUT_KEYBOARD = 1;
+    private const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
     private const uint KEYEVENTF_KEYUP = 0x0002;
+    private static readonly HashSet<int> ExtendedVirtualKeys = new()
+    {
+        // Navigation/editing cluster, right-side modifiers, Windows/App keys,
+        // and keypad divide are emitted with the E0 extended-key prefix.
+        0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28,
+        0x2D, 0x2E, 0x5B, 0x5C, 0x5D, 0x6F, 0xA3, 0xA5
+    };
 
     public static bool SelectAll() => SendChord(VK_CONTROL, VK_A);
     public static bool Copy() => SendChord(VK_CONTROL, VK_C);
@@ -49,11 +58,17 @@ internal static class KeyboardInputService
             keyboard = new KEYBDINPUT
             {
                 virtualKey = (ushort)virtualKey,
-                flags = keyUp ? KEYEVENTF_KEYUP : 0,
+                flags = GetKeyboardEventFlags(virtualKey, keyUp),
                 extraInfo = GetMessageExtraInfo()
             }
         }
     };
+
+    internal static uint GetKeyboardEventFlags(int virtualKey, bool keyUp)
+    {
+        uint flags = keyUp ? KEYEVENTF_KEYUP : 0;
+        return ExtendedVirtualKeys.Contains(virtualKey) ? flags | KEYEVENTF_EXTENDEDKEY : flags;
+    }
 
     [StructLayout(LayoutKind.Sequential)] private struct INPUT { public uint type; public InputUnion union; }
     [StructLayout(LayoutKind.Explicit)] private struct InputUnion
