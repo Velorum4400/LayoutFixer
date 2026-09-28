@@ -189,7 +189,8 @@ var staThread = new Thread(() =>
 
         using var viewer = new LogViewerForm();
         viewer.CreateControl();
-        Check(!viewer.Controls.OfType<System.Windows.Forms.TabControl>().Any(), "scanner log tab remains removed");
+        Check(viewer.Controls.OfType<System.Windows.Forms.TabControl>().Single().TabPages.Count == 2,
+            "log viewer includes a scanner log tab");
 
         using var scanner = new ScannerInputService(new AppSettings());
         using var settings = new SettingsShellForm(new AppSettings(), scanner);
