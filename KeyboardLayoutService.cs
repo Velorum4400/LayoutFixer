@@ -104,6 +104,28 @@ public static class KeyboardLayoutService
         return true;
     }
 
+    public static bool TryGetEnglish(out KeyboardLayoutInfo english)
+    {
+        KeyboardLayoutInfo[] snapshot;
+        lock (Sync) snapshot = _layouts.ToArray();
+        english = snapshot.FirstOrDefault(layout => (layout.LanguageId & 0x03ff) == 0x09)!;
+        return english != null;
+    }
+
+    public static bool TryGetCurrentLayout(IntPtr targetWindow, out KeyboardLayoutInfo current)
+    {
+        current = default!;
+        IntPtr handle = GetLayoutForWindow(targetWindow);
+        if (handle == IntPtr.Zero) return false;
+        KeyboardLayoutInfo[] snapshot;
+        lock (Sync) snapshot = _layouts.ToArray();
+        int index = FindLayout(snapshot, handle);
+        if (index < 0 && RefreshLayouts()) { lock (Sync) snapshot = _layouts.ToArray(); index = FindLayout(snapshot, handle); }
+        if (index < 0) return false;
+        current = snapshot[index];
+        return true;
+    }
+
     public static bool TryGetMap(KeyboardLayoutInfo layout, out KeyboardLayoutMap map)
     {
         lock (Sync)
