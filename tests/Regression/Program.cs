@@ -99,6 +99,10 @@ Check(!whitespaceOnly.HasFragment && !whitespaceOnly.BoundaryWhitespaceFound &&
       whitespaceOnly.TrailingWhitespaceLength == 1,
     "trailing whitespace alone is not a last-word boundary");
 CheckLastWord("оченьдлинноеслово", 0, 17, 0, false, "long Unicode last word is recognized");
+CheckLastWord("שלום", 0, 4, 0, false, "RTL first word is recognized");
+CheckLastWord("שלום עולם", 5, 4, 0, true, "RTL last word has a whitespace boundary");
+CheckLastWord("שלום עולם!", 5, 5, 0, true, "RTL punctuation remains part of last word");
+CheckLastWord("שלום עולם   ", 5, 4, 3, true, "RTL trailing whitespace is excluded");
 Check(typeof(HotkeyService).GetEvents().Any(x => x.Name == "Pressed"),
     "hotkey service exposes only the trigger event");
 Check(typeof(TextReplacementService).Assembly.GetType("LayoutFixer.TextFixer") == null,
