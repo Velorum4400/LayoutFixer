@@ -194,8 +194,8 @@ var staThread = new Thread(() =>
         using var scanner = new ScannerInputService(new AppSettings());
         using var settings = new SettingsShellForm(new AppSettings(), scanner);
         settings.CreateControl();
-        var scannerNotice = (System.Windows.Forms.Label)typeof(SettingsShellForm)
-            .GetField("_scannerUnavailable", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(settings)!;
+        var scannerInput = (System.Windows.Forms.TextBox)typeof(SettingsShellForm)
+            .GetField("_scannerScanBox", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(settings)!;
         var wordHotkey = (System.Windows.Forms.Button)typeof(SettingsShellForm)
             .GetField("_wordHotkey", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(settings)!;
         var selectedHotkey = (System.Windows.Forms.Button)typeof(SettingsShellForm)
@@ -208,6 +208,8 @@ var staThread = new Thread(() =>
             .GetField("_scannerEnabled", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(settings)!;
         Check(scannerEnabled.Text == UiText.Get("scanner_enable"),
             "scanner configuration is available");
+        Check(scannerInput.ReadOnly && scannerInput.Text == UiText.Get("scanner_scan_here"),
+            "scanner configuration provides a scan field");
     }
     catch (Exception ex) { staFailure = ex; }
 });
