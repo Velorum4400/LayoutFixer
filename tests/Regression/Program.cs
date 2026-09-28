@@ -64,6 +64,8 @@ Check(typeof(ClipboardService).GetMethod("WaitForTextChange") != null,
     "clipboard sequence wait is isolated in ClipboardService");
 Check(typeof(KeyboardInputService).GetMethod("SelectAll") != null,
     "SendInput chords are isolated in KeyboardInputService");
+Check(typeof(KeyboardInputService).GetMethod("SelectPreviousWord") != null,
+    "last-word selection chord is isolated in KeyboardInputService");
 Check(typeof(HotkeyService).GetEvents().Any(x => x.Name == "Pressed"),
     "hotkey service exposes only the trigger event");
 Check(typeof(TextReplacementService).Assembly.GetType("LayoutFixer.TextFixer") == null,
@@ -154,13 +156,18 @@ var staThread = new Thread(() =>
 
         using var settings = new SettingsShellForm(new AppSettings());
         settings.CreateControl();
-        string unavailable = UiText.Get("temporarily_unavailable");
-        var wordNotice = (System.Windows.Forms.Label)typeof(SettingsShellForm)
-            .GetField("_wordUnavailable", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(settings)!;
         var scannerNotice = (System.Windows.Forms.Label)typeof(SettingsShellForm)
             .GetField("_scannerUnavailable", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(settings)!;
-        Check(wordNotice.Text == unavailable && scannerNotice.Text == unavailable,
-            "deferred features remain marked unavailable");
+        var wordHotkey = (System.Windows.Forms.Button)typeof(SettingsShellForm)
+            .GetField("_wordHotkey", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(settings)!;
+        var selectedHotkey = (System.Windows.Forms.Button)typeof(SettingsShellForm)
+            .GetField("_selectedHotkey", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(settings)!;
+        Check(wordHotkey.Enabled && wordHotkey.Text == "Insert",
+            "last-word hotkey is available in Text correction");
+        Check(selectedHotkey.Enabled && selectedHotkey.Text == "Pause",
+            "selected-text hotkey is configurable in Text correction");
+        Check(scannerNotice.Text == UiText.Get("temporarily_unavailable"),
+            "scanner feature remains marked unavailable");
     }
     catch (Exception ex) { staFailure = ex; }
 });
@@ -180,6 +187,15 @@ Check(entered.Wait(TimeSpan.FromSeconds(2)), "worker starts");
 Check(!(bool)run.Invoke(null, new object[] { (Action)(() => { }) })!, "parallel correction rejected");
 release.Set();
 Check(SpinWait.SpinUntil(() => !(bool)busy.GetValue(null)!, 2000), "worker releases operation guard");
+
+Check(HotkeyDefinition.Parse("Insert").SetEquals(new[] { System.Windows.Forms.Keys.Insert }),
+    "Insert parses as an exact one-key hotkey");
+Check(!HotkeyDefinition.Parse("Insert").SetEquals(HotkeyDefinition.Parse("Ctrl+Insert")) &&
+      !HotkeyDefinition.Parse("Insert").SetEquals(HotkeyDefinition.Parse("Shift+Insert")) &&
+      !HotkeyDefinition.Parse("Insert").SetEquals(HotkeyDefinition.Parse("Alt+Insert")),
+    "modified Insert combinations do not equal the last-word hotkey");
+Check(HotkeyDefinition.Parse("Pause").SetEquals(new[] { System.Windows.Forms.Keys.Pause }),
+    "Pause parses as the selected-text hotkey");
 
 Console.WriteLine($"{passed} regression checks passed.");
 

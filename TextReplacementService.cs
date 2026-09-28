@@ -12,7 +12,10 @@ internal static class TextReplacementService
 
     public static IntPtr ForegroundWindow => GetForegroundWindow();
 
-    public static bool TryReplaceAllText(IntPtr targetWindow)
+    public static bool TryReplaceAllText(IntPtr targetWindow) =>
+        TryReplaceText(targetWindow, TextReplacementOperationType.FullText);
+
+    public static bool TryReplaceText(IntPtr targetWindow, TextReplacementOperationType operationType)
     {
         if (Interlocked.CompareExchange(ref _running, 1, 0) != 0)
         {
@@ -21,10 +24,14 @@ internal static class TextReplacementService
         }
 
         var total = Stopwatch.StartNew();
-        var operation = new TextReplacementOperation { TargetWindow = targetWindow };
+        var operation = new TextReplacementOperation
+        {
+            TargetWindow = targetWindow,
+            Type = operationType
+        };
         bool clipboardContainsOurData = false;
         bool pasted = false;
-        Log($"========== START operation={operation.Id:N}, mode=fullText, target=0x{targetWindow.ToInt64():X}");
+        Log($"========== START operation={operation.Id:N}, OperationType={operation.Type}, target=0x{targetWindow.ToInt64():X}");
 
         try
         {
@@ -58,13 +65,13 @@ internal static class TextReplacementService
             operation.RestoreSnapshotSequence = initialSnapshotSequence;
             Log($"Clipboard snapshot captured: formats={initialSnapshot.FormatCount}, sequence={initialSnapshotSequence}, elapsed={snapshotElapsed} ms");
 
-            if (!KeyboardInputService.SelectAll())
+            if (!PrepareSelection(operation.Type))
             {
-                Log("FAIL: Ctrl+A SendInput failed");
+                Log($"FAIL: selection preparation failed for OperationType={operation.Type}");
                 return false;
             }
-            Log("Ctrl+A sent");
-            Thread.Sleep(30);
+            if (operation.Type != TextReplacementOperationType.SelectedText)
+                Thread.Sleep(30);
             if (GetForegroundWindow() != targetWindow)
                 return Fail("active window changed before Ctrl+C", targetWindow);
 
@@ -188,6 +195,26 @@ internal static class TextReplacementService
             Log($"Operation result: operation={operation.Id:N}, pasted={pasted}, elapsed={total.ElapsedMilliseconds} ms");
             Log("========== END ==========" + Environment.NewLine);
             Volatile.Write(ref _running, 0);
+        }
+    }
+
+    private static bool PrepareSelection(TextReplacementOperationType operationType)
+    {
+        switch (operationType)
+        {
+            case TextReplacementOperationType.FullText:
+                if (!KeyboardInputService.SelectAll()) return false;
+                Log("Ctrl+A sent");
+                return true;
+            case TextReplacementOperationType.LastWord:
+                if (!KeyboardInputService.SelectPreviousWord()) return false;
+                Log("Ctrl+Shift+Left sent");
+                return true;
+            case TextReplacementOperationType.SelectedText:
+                Log("Existing selection retained");
+                return true;
+            default:
+                return false;
         }
     }
 

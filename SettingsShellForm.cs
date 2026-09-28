@@ -27,11 +27,13 @@ public sealed class SettingsShellForm : Form
 
     private readonly CheckBox _full = new();
     private readonly CheckBox _word = new();
+    private readonly CheckBox _selected = new();
     private readonly ModernButton _fullHotkey = new();
     private readonly ModernButton _wordHotkey = new();
+    private readonly ModernButton _selectedHotkey = new();
     private readonly Label _fullLabel = new();
     private readonly Label _wordLabel = new();
-    private readonly Label _wordUnavailable = new();
+    private readonly Label _selectedLabel = new();
     private readonly Label _hotkeyHint = new();
 
     private readonly ComboBox _language = new();
@@ -181,25 +183,31 @@ public sealed class SettingsShellForm : Form
         _fullHotkey.Click += (_, _) => EditHotkey(_fullHotkey);
 
         _word.SetBounds(34, 116, 24, 30);
-        _word.Checked = false;
-        _word.Enabled = false;
+        _word.Checked = _settings.LastWordEnabled;
         _wordLabel.SetBounds(72, 104, 560, 56);
         StyleMainLabel(_wordLabel);
         _wordHotkey.SetBounds(650, 108, 180, 42);
         _wordHotkey.Primary = false;
-        _wordHotkey.Text = "Insert";
-        _wordHotkey.Enabled = false;
+        _wordHotkey.Text = _settings.LastWordHotkey;
+        _wordHotkey.Click += (_, _) => EditHotkey(_wordHotkey);
 
-        _wordUnavailable.SetBounds(72, 160, 650, 36);
-        _wordUnavailable.ForeColor = Color.FromArgb(178, 92, 20);
-        _wordUnavailable.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+        _selected.SetBounds(34, 184, 24, 30);
+        _selected.Checked = _settings.SelectedTextEnabled;
+        _selectedLabel.SetBounds(72, 172, 560, 56);
+        StyleMainLabel(_selectedLabel);
+        _selectedHotkey.SetBounds(650, 176, 180, 42);
+        _selectedHotkey.Primary = false;
+        _selectedHotkey.Text = _settings.SelectedTextHotkey;
+        _selectedHotkey.Click += (_, _) => EditHotkey(_selectedHotkey);
 
-        _hotkeyHint.SetBounds(34, 224, 800, 82);
+        _hotkeyHint.SetBounds(34, 252, 800, 82);
         _hotkeyHint.ForeColor = Color.FromArgb(93, 108, 130);
         _hotkeyHint.Font = new Font("Segoe UI", 10F);
         _hotkeyHint.TextAlign = ContentAlignment.TopLeft;
 
-        card.Controls.AddRange(new Control[] { _full, _fullLabel, _fullHotkey, _word, _wordLabel, _wordHotkey, _wordUnavailable, _hotkeyHint });
+        card.Controls.AddRange(new Control[] { _full, _fullLabel, _fullHotkey,
+            _word, _wordLabel, _wordHotkey, _selected, _selectedLabel,
+            _selectedHotkey, _hotkeyHint });
         _correctionPage.Controls.Add(card);
     }
 
@@ -309,9 +317,10 @@ public sealed class SettingsShellForm : Form
         int available = Math.Max(680, _host.ClientSize.Width - 56);
         _fullHotkey.Left = Math.Max(580, available - 210);
         _wordHotkey.Left = _fullHotkey.Left;
+        _selectedHotkey.Left = _fullHotkey.Left;
         _fullLabel.Width = Math.Max(420, _fullHotkey.Left - 94);
         _wordLabel.Width = _fullLabel.Width;
-        _wordUnavailable.Width = Math.Max(560, available - 90);
+        _selectedLabel.Width = _fullLabel.Width;
         _hotkeyHint.Width = Math.Max(620, available - 70);
         _scannerUnavailable.Width = Math.Max(650, available - 70);
 
@@ -330,7 +339,7 @@ public sealed class SettingsShellForm : Form
 
         SetTextDirection(_fullLabel, rtl);
         SetTextDirection(_wordLabel, rtl);
-        SetTextDirection(_wordUnavailable, rtl);
+        SetTextDirection(_selectedLabel, rtl);
         SetTextDirection(_hotkeyHint, rtl, topAligned: true);
 
         SetTextDirection(_languageLabel, rtl);
@@ -393,13 +402,26 @@ public sealed class SettingsShellForm : Form
     private void SaveSettings()
     {
         string full = _fullHotkey.Text;
-        if (!HotkeyDefinition.IsValid(full))
+        string word = _wordHotkey.Text;
+        string selected = _selectedHotkey.Text;
+        if (!HotkeyDefinition.IsValid(full) || !HotkeyDefinition.IsValid(word) ||
+            !HotkeyDefinition.IsValid(selected))
         {
             MessageBox.Show(this, UiText.Get("invalid_hotkey"), AppInfo.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
+        if (new[] { full, word, selected }.Distinct(StringComparer.OrdinalIgnoreCase).Count() != 3)
+        {
+            MessageBox.Show(this, UiText.Get("duplicate_hotkey"), AppInfo.Name,
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
         _settings.FullTextEnabled = _full.Checked;
         _settings.FullTextHotkey = full;
+        _settings.LastWordEnabled = _word.Checked;
+        _settings.LastWordHotkey = word;
+        _settings.SelectedTextEnabled = _selected.Checked;
+        _settings.SelectedTextHotkey = selected;
         _settings.StartWithWindows = _startup.Checked;
         _settings.Language = (_language.SelectedItem as LanguageItem)?.Code ?? "en";
 
@@ -420,6 +442,10 @@ public sealed class SettingsShellForm : Form
         AppSettings defaults = AppSettings.CreateDefault();
         _full.Checked = defaults.FullTextEnabled;
         _fullHotkey.Text = defaults.FullTextHotkey;
+        _word.Checked = defaults.LastWordEnabled;
+        _wordHotkey.Text = defaults.LastWordHotkey;
+        _selected.Checked = defaults.SelectedTextEnabled;
+        _selectedHotkey.Text = defaults.SelectedTextHotkey;
         _startup.Checked = defaults.StartWithWindows;
 
         UiText.Language = defaults.Language;
@@ -436,7 +462,7 @@ public sealed class SettingsShellForm : Form
 
         _fullLabel.Text = UiText.Get("full_text");
         _wordLabel.Text = UiText.Get("selection_word");
-        _wordUnavailable.Text = UiText.Get("temporarily_unavailable");
+        _selectedLabel.Text = UiText.Get("selected_text");
         _hotkeyHint.Text = UiText.Get("hotkey_hint");
 
         _languageLabel.Text = UiText.Get("language");
@@ -514,3 +540,4 @@ public sealed class SettingsShellForm : Form
         };
     }
 }
+

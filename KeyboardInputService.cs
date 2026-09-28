@@ -9,12 +9,15 @@ internal static class KeyboardInputService
     private const int VK_A = 0x41;
     private const int VK_C = 0x43;
     private const int VK_V = 0x56;
+    private const int VK_SHIFT = 0x10;
+    private const int VK_LEFT = 0x25;
     private const uint INPUT_KEYBOARD = 1;
     private const uint KEYEVENTF_KEYUP = 0x0002;
 
     public static bool SelectAll() => SendChord(VK_CONTROL, VK_A);
     public static bool Copy() => SendChord(VK_CONTROL, VK_C);
     public static bool Paste() => SendChord(VK_CONTROL, VK_V);
+    public static bool SelectPreviousWord() => SendChord(VK_CONTROL, VK_SHIFT, VK_LEFT);
 
     private static bool SendChord(int modifier, int key)
     {
@@ -22,6 +25,17 @@ internal static class KeyboardInputService
         {
             CreateKey(modifier, false), CreateKey(key, false),
             CreateKey(key, true), CreateKey(modifier, true)
+        };
+        uint sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
+        return sent == inputs.Length;
+    }
+
+    private static bool SendChord(int modifier1, int modifier2, int key)
+    {
+        INPUT[] inputs =
+        {
+            CreateKey(modifier1, false), CreateKey(modifier2, false), CreateKey(key, false),
+            CreateKey(key, true), CreateKey(modifier2, true), CreateKey(modifier1, true)
         };
         uint sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
         return sent == inputs.Length;
@@ -59,3 +73,4 @@ internal static class KeyboardInputService
     private static extern uint SendInput(uint inputCount, INPUT[] inputs, int inputSize);
     [DllImport("user32.dll")] private static extern IntPtr GetMessageExtraInfo();
 }
+

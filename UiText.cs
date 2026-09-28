@@ -38,9 +38,13 @@ public static class UiText
         ["startup"] = L("Start with Windows", "Запускать вместе с Windows", "הפעל עם Windows"),
         ["full_text"] = L("Correct all text", "Исправлять весь текст", "תקן את כל הטקסט"),
         ["selection_word"] = L(
-            "Correct selected text or the last word",
-            "Исправлять выделенный текст или последнее слово",
-            "תקן טקסט מסומן או את המילה האחרונה"),
+            "Correct the last word",
+            "Исправлять последнее слово",
+            "תקן את המילה האחרונה"),
+        ["selected_text"] = L(
+            "Correct selected text",
+            "Исправлять выделенный текст",
+            "תקן טקסט מסומן"),
         ["temporarily_unavailable"] = L(
             "Temporarily unavailable",
             "Временно недоступно",
@@ -86,9 +90,9 @@ public static class UiText
             "Каждый хоткей должен содержать от 1 до 3 клавиш.",
             "כל מקש קיצור חייב להכיל בין מקש אחד ל-3 מקשים."),
         ["duplicate_hotkey"] = L(
-            "The two actions cannot use the same hotkey.",
-            "Хоткеи для двух действий не могут быть одинаковыми.",
-            "לא ניתן להשתמש באותו מקש קיצור לשתי הפעולות."),
+            "Actions cannot use the same hotkey.",
+            "Хоткеи для действий не могут быть одинаковыми.",
+            "לא ניתן להשתמש באותו מקש קיצור למספר פעולות."),
         ["new_hotkey"] = L("New hotkey", "Новый хоткей", "מקש קיצור חדש"),
         ["press_hotkey"] = L(
             "Press a new key or combination (up to 3 keys):",
@@ -100,10 +104,8 @@ public static class UiText
             "Сначала нажми от 1 до 3 клавиш.",
             "תחילה לחץ על 1 עד 3 מקשים."),
         ["tray_full"] = L("Correct all text", "Исправить весь текст", "תקן את כל הטקסט"),
-        ["tray_word"] = L(
-            "Correct selection / last word",
-            "Исправить выделение / последнее слово",
-            "תקן בחירה / מילה אחרונה"),
+        ["tray_word"] = L("Correct last word", "Исправить последнее слово", "תקן מילה אחרונה"),
+        ["tray_selected"] = L("Correct selected text", "Исправить выделенный текст", "תקן טקסט מסומן"),
         ["tray_settings"] = L("Settings...", "Настройки...", "הגדרות..."),
         ["tray_exit"] = L("Exit", "Выход", "יציאה"),
         ["tagline"] = L("Type in the right language", "Печатай на нужном языке", "הקלד בשפה הנכונה"),
@@ -144,3 +146,4 @@ public static class UiText
             ["he"] = he
         };
 }
+

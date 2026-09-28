@@ -9,10 +9,12 @@ public sealed class TrayApplicationContext : ApplicationContext
 {
     private readonly NotifyIcon _tray;
     private readonly Icon _appIcon;
-    private readonly HotkeyService _hotkeyService;
+    private readonly HotkeyService _fullHotkeyService;
+    private readonly HotkeyService _lastWordHotkeyService;
+    private readonly HotkeyService _selectedTextHotkeyService;
     private readonly AppSettings _settings;
     private readonly System.Windows.Forms.Timer _hotkeyTimer;
-    private bool _hotkeyQueued;
+    private TextReplacementOperationType? _queuedOperation;
 
     public TrayApplicationContext()
     {
@@ -29,17 +31,21 @@ public sealed class TrayApplicationContext : ApplicationContext
             Text = AppInfo.DisplayName,
             ContextMenuStrip = BuildMenu()
         };
-        _hotkeyService = new HotkeyService { Hotkey = _settings.FullTextHotkey };
+        _fullHotkeyService = new HotkeyService { Hotkey = _settings.FullTextHotkey };
+        _lastWordHotkeyService = new HotkeyService { Hotkey = _settings.LastWordHotkey };
+        _selectedTextHotkeyService = new HotkeyService { Hotkey = _settings.SelectedTextHotkey };
         _hotkeyTimer = new System.Windows.Forms.Timer { Interval = 60 };
         _hotkeyTimer.Tick += (_, _) =>
         {
             _hotkeyTimer.Stop();
-            if (!_hotkeyQueued)
+            if (_queuedOperation is not TextReplacementOperationType operation)
                 return;
-            _hotkeyQueued = false;
-            ExecuteFullTextHotkey();
+            _queuedOperation = null;
+            ExecuteHotkey(operation);
         };
-        _hotkeyService.Pressed += OnHotkey;
+        _fullHotkeyService.Pressed += () => QueueHotkey(TextReplacementOperationType.FullText);
+        _lastWordHotkeyService.Pressed += () => QueueHotkey(TextReplacementOperationType.LastWord);
+        _selectedTextHotkeyService.Pressed += () => QueueHotkey(TextReplacementOperationType.SelectedText);
     }
 
     private ContextMenuStrip BuildMenu()
@@ -47,39 +53,46 @@ public sealed class TrayApplicationContext : ApplicationContext
         var menu = new ContextMenuStrip();
         var title = new ToolStripMenuItem(AppInfo.DisplayName) { Enabled = false };
         var full = new ToolStripMenuItem($"{UiText.Get("tray_full")} ({_settings.FullTextHotkey})");
-        full.Click += (_, _) => FixAllText();
-        var word = new ToolStripMenuItem($"{UiText.Get("tray_word")} — {UiText.Get("temporarily_unavailable")}")
-        {
-            Enabled = false
-        };
+        full.Click += (_, _) => RunCorrection(TextReplacementOperationType.FullText);
+        var word = new ToolStripMenuItem($"{UiText.Get("tray_word")} ({_settings.LastWordHotkey})");
+        word.Click += (_, _) => RunCorrection(TextReplacementOperationType.LastWord);
+        var selected = new ToolStripMenuItem($"{UiText.Get("tray_selected")} ({_settings.SelectedTextHotkey})");
+        selected.Click += (_, _) => RunCorrection(TextReplacementOperationType.SelectedText);
         var settings = new ToolStripMenuItem(UiText.Get("tray_settings"));
         settings.Click += (_, _) => OpenSettings();
         var exit = new ToolStripMenuItem(UiText.Get("tray_exit"));
         exit.Click += (_, _) => ExitThread();
-        menu.Items.AddRange(new ToolStripItem[] { title, new ToolStripSeparator(), full, word,
+        menu.Items.AddRange(new ToolStripItem[] { title, new ToolStripSeparator(), full, word, selected,
             new ToolStripSeparator(), settings, exit });
         return menu;
     }
 
-    private void OnHotkey()
+    private void QueueHotkey(TextReplacementOperationType operation)
     {
         if (CorrectionWorker.IsBusy)
             return;
-        _hotkeyQueued = true;
+        _queuedOperation = operation;
         _hotkeyTimer.Stop();
         _hotkeyTimer.Start();
     }
 
-    private void ExecuteFullTextHotkey()
+    private void ExecuteHotkey(TextReplacementOperationType operation)
     {
-        if (!CorrectionWorker.IsBusy && _settings.FullTextEnabled)
-            FixAllText();
+        bool enabled = operation switch
+        {
+            TextReplacementOperationType.FullText => _settings.FullTextEnabled,
+            TextReplacementOperationType.LastWord => _settings.LastWordEnabled,
+            TextReplacementOperationType.SelectedText => _settings.SelectedTextEnabled,
+            _ => false
+        };
+        if (!CorrectionWorker.IsBusy && enabled)
+            RunCorrection(operation);
     }
 
-    private void FixAllText()
+    private static void RunCorrection(TextReplacementOperationType operation)
     {
         IntPtr target = TextReplacementService.ForegroundWindow;
-        CorrectionWorker.TryRun(() => TextReplacementService.TryReplaceAllText(target));
+        CorrectionWorker.TryRun(() => TextReplacementService.TryReplaceText(target, operation));
     }
 
     private void OpenSettings()
@@ -88,7 +101,9 @@ public sealed class TrayApplicationContext : ApplicationContext
         if (form.ShowDialog() == DialogResult.OK)
         {
             UiText.Language = _settings.Language;
-            _hotkeyService.Hotkey = _settings.FullTextHotkey;
+            _fullHotkeyService.Hotkey = _settings.FullTextHotkey;
+            _lastWordHotkeyService.Hotkey = _settings.LastWordHotkey;
+            _selectedTextHotkeyService.Hotkey = _settings.SelectedTextHotkey;
             _tray.ContextMenuStrip = BuildMenu();
         }
     }
@@ -97,7 +112,9 @@ public sealed class TrayApplicationContext : ApplicationContext
     {
         _hotkeyTimer.Stop();
         _hotkeyTimer.Dispose();
-        _hotkeyService.Dispose();
+        _fullHotkeyService.Dispose();
+        _lastWordHotkeyService.Dispose();
+        _selectedTextHotkeyService.Dispose();
         _tray.Visible = false;
         _tray.Dispose();
         _appIcon.Dispose();
@@ -116,3 +133,4 @@ public sealed class TrayApplicationContext : ApplicationContext
         catch { }
     }
 }
+

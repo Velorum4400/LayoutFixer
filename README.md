@@ -2,9 +2,19 @@
 
 Windows tray utility for correcting text typed with the wrong keyboard layout.
 
-## Current architecture (1.6.0)
+## Current architecture (1.7.0)
 
-The active application contains one correction command: **Correct all text**.
+The active application contains three independent correction commands:
+
+- **Correct all text** selects with Ctrl+A.
+- **Correct last word** selects with Ctrl+Shift+Left (default hotkey: Insert).
+- **Correct selected text** keeps the application's current selection (default
+  hotkey: Pause/Break).
+
+Each command has its own enable switch and configurable hotkey in **Text
+correction**. Modified Insert combinations such as Ctrl+Insert and Shift+Insert
+do not match the default one-key Last Word hotkey.
+
 At startup, LayoutFixer stores the Windows keyboard layouts in their system
 order. Each successful correction advances exactly one position in that list
 and wraps from the last layout to the first.
@@ -33,15 +43,11 @@ is still current. The default paste delay is 100 ms and is configurable in the
 replacement service. Diagnostics retain owner, process, formats, length and
 privacy-safe hash data without recording user text.
 
-The following settings remain visible as disabled placeholders and display
-**Temporarily unavailable**:
+Scanner configuration remains visible as a disabled placeholder marked
+**Temporarily unavailable**.
 
-- Correct selected text or the last word
-- Scanner configuration
-
-The old selection/last-word implementation, selection-restoration option and
-scanner subsystem have been removed from the runtime. Only `diagnostic.log`
-remains in the log viewer.
+The old selection-restoration option and scanner subsystem remain removed from
+the runtime. Only `diagnostic.log` remains in the log viewer.
 
 ## Build
 

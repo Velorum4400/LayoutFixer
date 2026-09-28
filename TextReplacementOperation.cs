@@ -2,9 +2,17 @@ using System;
 
 namespace LayoutFixer;
 
+internal enum TextReplacementOperationType
+{
+    FullText,
+    LastWord,
+    SelectedText
+}
+
 internal sealed class TextReplacementOperation
 {
     public Guid Id { get; } = Guid.NewGuid();
+    public TextReplacementOperationType Type { get; init; }
     public IntPtr TargetWindow { get; init; }
     public KeyboardLayoutInfo SourceLayout { get; set; } = default!;
     public KeyboardLayoutInfo TargetLayout { get; set; } = default!;

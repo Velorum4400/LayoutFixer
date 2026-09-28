@@ -42,6 +42,24 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.7.0", new[]
+        {
+            T(
+                "Added independent Last Word and Selected Text correction commands. They share the existing Clipboard, layout-map and conversion pipeline with full-text correction.",
+                "Добавлены независимые команды исправления последнего слова и выделенного текста. Они используют общий Clipboard pipeline, карты раскладок и конвертацию вместе с исправлением всего текста.",
+                "נוספו פקודות עצמאיות לתיקון המילה האחרונה והטקסט המסומן. הן משתמשות באותו Clipboard pipeline, מפות פריסה והמרה של תיקון הטקסט המלא."),
+            T(
+                "Text correction settings now provide separate enable switches and configurable hotkeys for all three commands. Defaults are Insert for Last Word and Pause/Break for Selected Text.",
+                "В настройках исправления текста теперь есть отдельные переключатели и настраиваемые хоткеи для всех трёх команд. По умолчанию: Insert для последнего слова и Pause/Break для выделенного текста.",
+                "הגדרות תיקון הטקסט כוללות כעת מתגים ומקשי קיצור נפרדים לכל שלוש הפקודות. ברירות המחדל הן Insert למילה האחרונה ו-Pause/Break לטקסט מסומן.")
+        }, new[]
+        {
+            T(
+                "Single-key hotkeys use exact matching, so Ctrl+Insert, Shift+Insert and Alt+Insert retain their normal application behavior.",
+                "Одноклавишные хоткеи используют точное совпадение, поэтому Ctrl+Insert, Shift+Insert и Alt+Insert сохраняют стандартное поведение приложений.",
+                "מקשי קיצור בני מקש אחד משתמשים בהתאמה מדויקת, ולכן Ctrl+Insert, Shift+Insert ו-Alt+Insert שומרים על פעולת היישום הרגילה.")
+        });
+
         AddVersion("v1.6.0", new[]
         {
             T(
