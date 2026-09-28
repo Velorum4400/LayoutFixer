@@ -7,6 +7,8 @@ using System.Runtime.InteropServices;
 namespace LayoutFixer;
 
 public sealed record KeyboardLayoutInfo(IntPtr Handle, ushort LanguageId, string DisplayName, string ShortName);
+public sealed record KeyboardLayoutDiagnostic(uint TargetThreadId, uint LayoutFixerThreadId,
+    IntPtr TargetThreadLayout, IntPtr LayoutFixerThreadLayout);
 
 public static class KeyboardLayoutService
 {
@@ -126,6 +128,14 @@ public static class KeyboardLayoutService
         return true;
     }
 
+    public static KeyboardLayoutDiagnostic GetLayoutDiagnostic(IntPtr targetWindow)
+    {
+        uint targetThreadId = targetWindow == IntPtr.Zero ? 0 : GetWindowThreadProcessId(targetWindow, IntPtr.Zero);
+        uint layoutFixerThreadId = GetCurrentThreadId();
+        return new KeyboardLayoutDiagnostic(targetThreadId, layoutFixerThreadId,
+            GetKeyboardLayout(targetThreadId), GetKeyboardLayout(layoutFixerThreadId));
+    }
+
     public static bool TryGetMap(KeyboardLayoutInfo layout, out KeyboardLayoutMap map)
     {
         lock (Sync)
@@ -193,6 +203,7 @@ public static class KeyboardLayoutService
 
     [DllImport("user32.dll")] private static extern int GetKeyboardLayoutList(int nBuff, [Out] IntPtr[]? lpList);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, IntPtr processId);
+    [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
     [DllImport("user32.dll")] private static extern IntPtr GetKeyboardLayout(uint idThread);
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
