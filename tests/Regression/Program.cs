@@ -191,7 +191,8 @@ var staThread = new Thread(() =>
         viewer.CreateControl();
         Check(!viewer.Controls.OfType<System.Windows.Forms.TabControl>().Any(), "scanner log tab remains removed");
 
-        using var settings = new SettingsShellForm(new AppSettings());
+        using var scanner = new ScannerInputService(new AppSettings());
+        using var settings = new SettingsShellForm(new AppSettings(), scanner);
         settings.CreateControl();
         var scannerNotice = (System.Windows.Forms.Label)typeof(SettingsShellForm)
             .GetField("_scannerUnavailable", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(settings)!;
@@ -203,8 +204,10 @@ var staThread = new Thread(() =>
             "last-word hotkey is available in Text correction");
         Check(selectedHotkey.Enabled && selectedHotkey.Text == "Pause",
             "selected-text hotkey is configurable in Text correction");
-        Check(scannerNotice.Text == UiText.Get("temporarily_unavailable"),
-            "scanner feature remains marked unavailable");
+        var scannerEnabled = (System.Windows.Forms.CheckBox)typeof(SettingsShellForm)
+            .GetField("_scannerEnabled", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(settings)!;
+        Check(scannerEnabled.Text == UiText.Get("scanner_enable"),
+            "scanner configuration is available");
     }
     catch (Exception ex) { staFailure = ex; }
 });
