@@ -42,6 +42,20 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.8.0", new[]
+        {
+            T(
+                "Last Word now finds the final continuous non-whitespace fragment before the caret, including punctuation, rather than relying on a single editor-defined word selection.",
+                "Последнее слово теперь определяется как последний непрерывный непробельный фрагмент перед caret, включая пунктуацию, вместо одного выделения слова по правилам редактора.",
+                "המילה האחרונה מוגדרת כעת כמקטע הרציף האחרון שאינו רווח לפני הסמן, כולל סימני פיסוק, במקום להסתמך על בחירת מילה אחת לפי כללי העורך.")
+        }, new[]
+        {
+            T(
+                "Added a bounded ten-step Ctrl+Shift+Left search, safe temporary Clipboard copies, exact fragment selection, trailing-whitespace handling and LastWord diagnostics without recording text contents.",
+                "Добавлен ограниченный поиск до десяти шагов Ctrl+Shift+Left, безопасные временные Clipboard-копии, точное выделение фрагмента, обработка trailing whitespace и диагностика LastWord без записи содержимого текста.",
+                "נוספו חיפוש מוגבל לעשרה שלבים עם Ctrl+Shift+Left, העתקות לוח זמניות בטוחות, בחירה מדויקת של המקטע, טיפול ברווחים בסוף ואבחון LastWord בלי רישום תוכן הטקסט.")
+        });
+
         AddVersion("v1.7.2", Array.Empty<string>(), new[]
         {
             T(

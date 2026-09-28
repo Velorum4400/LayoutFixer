@@ -12,6 +12,7 @@ internal static class KeyboardInputService
     private const int VK_V = 0x56;
     private const int VK_SHIFT = 0x10;
     private const int VK_LEFT = 0x25;
+    private const int VK_RIGHT = 0x27;
     private const uint INPUT_KEYBOARD = 1;
     private const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
     private const uint KEYEVENTF_KEYUP = 0x0002;
@@ -27,6 +28,9 @@ internal static class KeyboardInputService
     public static bool Copy() => SendChord(VK_CONTROL, VK_C);
     public static bool Paste() => SendChord(VK_CONTROL, VK_V);
     public static bool SelectPreviousWord() => SendChord(VK_CONTROL, VK_SHIFT, VK_LEFT);
+    public static bool CollapseSelectionToStart() => SendRepeatedKey(VK_LEFT, 1, shift: false);
+    public static bool MoveCaretRight(int count) => SendRepeatedKey(VK_RIGHT, count, shift: false);
+    public static bool SelectCharactersRight(int count) => SendRepeatedKey(VK_RIGHT, count, shift: true);
 
     private static bool SendChord(int modifier, int key)
     {
@@ -46,6 +50,27 @@ internal static class KeyboardInputService
             CreateKey(modifier1, false), CreateKey(modifier2, false), CreateKey(key, false),
             CreateKey(key, true), CreateKey(modifier2, true), CreateKey(modifier1, true)
         };
+        uint sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
+        return sent == inputs.Length;
+    }
+
+    private static bool SendRepeatedKey(int key, int count, bool shift)
+    {
+        if (count <= 0)
+            return true;
+
+        var inputs = new INPUT[count * 2 + (shift ? 2 : 0)];
+        int index = 0;
+        if (shift)
+            inputs[index++] = CreateKey(VK_SHIFT, false);
+        for (int i = 0; i < count; i++)
+        {
+            inputs[index++] = CreateKey(key, false);
+            inputs[index++] = CreateKey(key, true);
+        }
+        if (shift)
+            inputs[index] = CreateKey(VK_SHIFT, true);
+
         uint sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
         return sent == inputs.Length;
     }

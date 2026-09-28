@@ -7,7 +7,8 @@ Windows tray utility for correcting text typed with the wrong keyboard layout.
 The active application contains three independent correction commands:
 
 - **Correct all text** selects with Ctrl+A.
-- **Correct last word** selects with Ctrl+Shift+Left (default hotkey: Insert).
+- **Correct last word** finds the final continuous non-whitespace fragment with
+  repeated Ctrl+Shift+Left selection expansion (default hotkey: Insert).
 - **Correct selected text** keeps the application's current selection (default
   hotkey: Pause/Break).
 
@@ -20,6 +21,10 @@ combination, LayoutFixer observes it without suppressing physical modifier
 events; shortcuts such as Ctrl+Shift+Left continue to reach the active app.
 The synthetic Ctrl+Shift+Left used for Last Word sends the required extended-key
 flag for the navigation key.
+
+Last Word treats punctuation as part of the fragment. It makes at most ten
+selection-expansion attempts, then reduces any temporary selection to the exact
+fragment before the shared Copy/convert/Paste pipeline begins.
 
 At startup, LayoutFixer stores the Windows keyboard layouts in their system
 order. Each successful correction advances exactly one position in that list

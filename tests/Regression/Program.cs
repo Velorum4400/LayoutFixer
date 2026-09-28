@@ -9,6 +9,15 @@ void Check(bool condition, string name)
     passed++;
 }
 
+void CheckLastWord(string selection, int start, int length, int trailing, bool boundary, string name)
+{
+    LastWordSelectionAnalysis analysis = LastWordSelectionAnalyzer.Analyze(selection);
+    Check(analysis.HasFragment && analysis.FragmentStart == start &&
+          analysis.FragmentLength == length &&
+          analysis.TrailingWhitespaceLength == trailing &&
+          analysis.BoundaryWhitespaceFound == boundary, name);
+}
+
 Check(KeyboardLayoutService.RefreshLayouts(), "installed layouts refresh");
 IReadOnlyList<KeyboardLayoutInfo> layouts = KeyboardLayoutService.Layouts;
 Check(layouts.Count > 0, "installed layout list retained");
@@ -66,12 +75,21 @@ Check(typeof(KeyboardInputService).GetMethod("SelectAll") != null,
     "SendInput chords are isolated in KeyboardInputService");
 Check(typeof(KeyboardInputService).GetMethod("SelectPreviousWord") != null,
     "last-word selection chord is isolated in KeyboardInputService");
+Check(typeof(KeyboardInputService).GetMethod("CollapseSelectionToStart") != null &&
+      typeof(KeyboardInputService).GetMethod("SelectCharactersRight") != null,
+    "exact last-word selection controls are isolated in KeyboardInputService");
 Check(KeyboardInputService.GetKeyboardEventFlags(0x25, false) == 0x0001 &&
       KeyboardInputService.GetKeyboardEventFlags(0x25, true) == 0x0003,
     "extended Left key uses KEYEVENTF_EXTENDEDKEY for down and up");
 Check(KeyboardInputService.GetKeyboardEventFlags(0x10, false) == 0 &&
       KeyboardInputService.GetKeyboardEventFlags(0x11, true) == 0x0002,
     "Ctrl and Shift retain ordinary keyboard flags");
+CheckLastWord("hello", 0, 5, 0, false, "start-of-field last word is recognized");
+CheckLastWord("hello,", 0, 6, 0, false, "punctuation remains part of last word");
+CheckLastWord("hello!!!", 0, 8, 0, false, "multiple punctuation remains part of last word");
+CheckLastWord("one hello,", 4, 6, 0, true, "whitespace boundary precedes last fragment");
+CheckLastWord("one hello,   ", 4, 6, 3, true, "trailing whitespace is excluded from last fragment");
+CheckLastWord("оченьдлинноеслово", 0, 17, 0, false, "long Unicode last word is recognized");
 Check(typeof(HotkeyService).GetEvents().Any(x => x.Name == "Pressed"),
     "hotkey service exposes only the trigger event");
 Check(typeof(TextReplacementService).Assembly.GetType("LayoutFixer.TextFixer") == null,
