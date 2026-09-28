@@ -196,6 +196,11 @@ Check(!HotkeyDefinition.Parse("Insert").SetEquals(HotkeyDefinition.Parse("Ctrl+I
     "modified Insert combinations do not equal the last-word hotkey");
 Check(HotkeyDefinition.Parse("Pause").SetEquals(new[] { System.Windows.Forms.Keys.Pause }),
     "Pause parses as the selected-text hotkey");
+Check(HotkeyDefinition.IsModifierOnly(HotkeyDefinition.Parse("Ctrl+Shift")),
+    "Ctrl+Shift is recognized as a modifier-only hotkey");
+Check(!HotkeyDefinition.IsModifierOnly(HotkeyDefinition.Parse("Ctrl+Shift+Left")) &&
+      !HotkeyDefinition.IsModifierOnly(HotkeyDefinition.Parse("Insert")),
+    "application shortcuts and Insert are not modifier-only hotkeys");
 
 Console.WriteLine($"{passed} regression checks passed.");
 

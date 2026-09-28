@@ -15,6 +15,10 @@ Each command has its own enable switch and configurable hotkey in **Text
 correction**. Modified Insert combinations such as Ctrl+Insert and Shift+Insert
 do not match the default one-key Last Word hotkey.
 
+The default full-text hotkey is Ctrl+Shift. Because this is a modifier-only
+combination, LayoutFixer observes it without suppressing physical modifier
+events; shortcuts such as Ctrl+Shift+Left continue to reach the active app.
+
 At startup, LayoutFixer stores the Windows keyboard layouts in their system
 order. Each successful correction advances exactly one position in that list
 and wraps from the last layout to the first.

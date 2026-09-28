@@ -21,12 +21,21 @@ public sealed class HotkeyService : IDisposable
     private HashSet<Keys>? _pending;
     private string _hotkey = "Ctrl+Shift";
     private HashSet<Keys> _keys = HotkeyDefinition.Parse("Ctrl+Shift");
+    private bool _modifierOnly = true;
 
     public event Action? Pressed;
     public string Hotkey
     {
         get => _hotkey;
-        set { _hotkey = value; _keys = HotkeyDefinition.Parse(value); }
+        set
+        {
+            _hotkey = value;
+            _keys = HotkeyDefinition.Parse(value);
+            _modifierOnly = HotkeyDefinition.IsModifierOnly(_keys);
+            _pressed.Clear();
+            _suppressed.Clear();
+            _pending = null;
+        }
     }
 
     public HotkeyService()
@@ -53,11 +62,21 @@ public sealed class HotkeyService : IDisposable
         if (down)
         {
             bool first = _pressed.Add(key);
+            if (first && _pending != null && !_pending.Contains(key))
+                _pending = null;
             if (first && _pending == null && _pressed.SetEquals(_keys))
             {
                 _pending = new HashSet<Keys>(_keys);
-                _suppressed.Add(key);
-                return (IntPtr)1;
+                // Ctrl+Shift is a valid full-text hotkey, but it is also the
+                // prefix of normal application shortcuts such as Ctrl+Shift+Left.
+                // Never suppress a modifier-only hotkey: if another key follows,
+                // the candidate is canceled and every physical event still reaches
+                // the active application unchanged.
+                if (!_modifierOnly)
+                {
+                    _suppressed.Add(key);
+                    return (IntPtr)1;
+                }
             }
             if (_suppressed.Contains(key)) return (IntPtr)1;
         }
@@ -89,3 +108,4 @@ public sealed class HotkeyService : IDisposable
     [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     private static extern IntPtr GetModuleHandle(string? moduleName);
 }
+

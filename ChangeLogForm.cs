@@ -42,6 +42,14 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.7.1", Array.Empty<string>(), new[]
+        {
+            T(
+                "Fixed Ctrl+Shift+Left being blocked while the default Ctrl+Shift full-text hotkey was active. Modifier-only hotkeys are now observed until release without suppressing application keystrokes.",
+                "Исправлена блокировка Ctrl+Shift+Left при активном стандартном хоткее полного текста Ctrl+Shift. Хоткеи только из модификаторов теперь отслеживаются до отпускания клавиш без подавления нажатий приложения.",
+                "תוקנה חסימת Ctrl+Shift+Left כאשר מקש הקיצור המלא המוגדר כברירת מחדל Ctrl+Shift היה פעיל. מקשי קיצור המורכבים רק ממקשים משנים נצפים כעת עד לשחרורם בלי לדכא הקשות של יישומים.")
+        });
+
         AddVersion("v1.7.0", new[]
         {
             T(

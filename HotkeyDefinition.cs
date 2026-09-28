@@ -89,6 +89,12 @@ public static class HotkeyDefinition
             or Keys.LWin;
     }
 
+    public static bool IsModifierOnly(IEnumerable<Keys> keys)
+    {
+        Keys[] normalized = keys.Select(Normalize).Where(key => key != Keys.None).ToArray();
+        return normalized.Length > 0 && normalized.All(IsModifier);
+    }
+
     public static string ToDisplayName(Keys key)
     {
         key = Normalize(key);
@@ -214,3 +220,4 @@ public static class HotkeyDefinition
         return Enum.TryParse(token, true, out key);
     }
 }
+
