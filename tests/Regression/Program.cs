@@ -76,8 +76,13 @@ Check(typeof(KeyboardInputService).GetMethod("SelectAll") != null,
 Check(typeof(KeyboardInputService).GetMethod("SelectPreviousWord") != null,
     "last-word selection chord is isolated in KeyboardInputService");
 Check(typeof(KeyboardInputService).GetMethod("CollapseSelectionToStart") != null &&
+      typeof(KeyboardInputService).GetMethod("CollapseSelectionToEnd") != null &&
+      typeof(KeyboardInputService).GetMethod("SelectCharactersLeft") != null &&
       typeof(KeyboardInputService).GetMethod("SelectCharactersRight") != null,
     "exact last-word selection controls are isolated in KeyboardInputService");
+Check(Enum.GetValues<LastWordSearchDirection>().SequenceEqual(new[]
+      { LastWordSearchDirection.Left, LastWordSearchDirection.Right }),
+    "last-word search supports Left and Right directions");
 Check(KeyboardInputService.GetKeyboardEventFlags(0x25, false) == 0x0001 &&
       KeyboardInputService.GetKeyboardEventFlags(0x25, true) == 0x0003,
     "extended Left key uses KEYEVENTF_EXTENDEDKEY for down and up");
