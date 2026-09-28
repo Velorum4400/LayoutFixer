@@ -45,7 +45,10 @@ public sealed class SettingsShellForm : Form
     private readonly ModernButton _changeLog = new();
     private readonly ModernButton _clearLog = new();
 
-    private readonly Label _scannerUnavailable = new();
+    private readonly Label _scannerIntro = new();
+    private readonly TextBox _scannerScanBox = new();
+    private readonly Label _scannerDeviceTitle = new();
+    private readonly Label _scannerDeviceValue = new();
     private readonly ScannerInputService _scanner;
     private readonly CheckBox _scannerEnabled = new();
     private readonly ModernButton _detectScanner = new();
@@ -267,14 +270,24 @@ public sealed class SettingsShellForm : Form
         card.Dock = DockStyle.Fill;
         _scannerEnabled.SetBounds(34, 32, 500, 32);
         _scannerEnabled.Checked = _settings.ScannerEnabled;
-        _scannerUnavailable.SetBounds(34, 84, 800, 80);
-        _scannerUnavailable.Font = new Font("Segoe UI", 13F, FontStyle.Bold);
-        _scannerUnavailable.ForeColor = Color.FromArgb(178, 92, 20);
-        _scannerUnavailable.TextAlign = ContentAlignment.TopLeft;
-        _detectScanner.SetBounds(34, 180, 220, 42);
+        _scannerIntro.SetBounds(34, 78, 820, 56);
+        _scannerIntro.ForeColor = Color.FromArgb(65, 82, 108);
+        _scannerIntro.TextAlign = ContentAlignment.TopLeft;
+        _scannerScanBox.SetBounds(34, 146, 620, 40);
+        _scannerScanBox.ReadOnly = true;
+        _scannerScanBox.Font = new Font("Segoe UI", 11F);
+        _scannerScanBox.Click += (_, _) => BeginScannerDetection();
+        _scannerScanBox.Enter += (_, _) => BeginScannerDetection();
+        _detectScanner.SetBounds(670, 144, 180, 42);
         _detectScanner.Primary = true;
-        _detectScanner.Click += (_, _) => { _scanner.BeginIdentification(); _scannerUnavailable.Text = UiText.Get("scanner_waiting"); };
-        card.Controls.AddRange(new Control[] { _scannerEnabled, _scannerUnavailable, _detectScanner });
+        _detectScanner.Click += (_, _) => BeginScannerDetection();
+        _scannerDeviceTitle.SetBounds(34, 212, 800, 32);
+        StyleCaption(_scannerDeviceTitle);
+        _scannerDeviceValue.SetBounds(34, 248, 820, 80);
+        _scannerDeviceValue.Font = new Font("Segoe UI", 10.5F, FontStyle.Bold);
+        _scannerDeviceValue.ForeColor = Color.FromArgb(30, 65, 105);
+        _scannerDeviceValue.TextAlign = ContentAlignment.TopLeft;
+        card.Controls.AddRange(new Control[] { _scannerEnabled, _scannerIntro, _scannerScanBox, _detectScanner, _scannerDeviceTitle, _scannerDeviceValue });
         _scannerPage.Controls.Add(card);
     }
 
@@ -332,7 +345,10 @@ public sealed class SettingsShellForm : Form
         _wordLabel.Width = _fullLabel.Width;
         _selectedLabel.Width = _fullLabel.Width;
         _hotkeyHint.Width = Math.Max(620, available - 70);
-        _scannerUnavailable.Width = Math.Max(650, available - 70);
+        _scannerIntro.Width = Math.Max(650, available - 70);
+        _scannerScanBox.Width = Math.Max(400, available - 300);
+        _scannerDeviceTitle.Width = Math.Max(650, available - 70);
+        _scannerDeviceValue.Width = Math.Max(650, available - 70);
 
         ApplyRtlGeometry();
     }
@@ -356,7 +372,9 @@ public sealed class SettingsShellForm : Form
         SetTextDirection(_layoutsTitle, rtl);
         SetTextDirection(_layoutsValue, rtl);
         SetTextDirection(_generalInfo, rtl, topAligned: true);
-        SetTextDirection(_scannerUnavailable, rtl, topAligned: true);
+        SetTextDirection(_scannerIntro, rtl, topAligned: true);
+        SetTextDirection(_scannerDeviceTitle, rtl);
+        SetTextDirection(_scannerDeviceValue, rtl, topAligned: true);
 
         _language.RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
         _startup.RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
@@ -370,7 +388,9 @@ public sealed class SettingsShellForm : Form
             _layoutsValue.Left = generalRight - _layoutsValue.Width;
             _generalInfo.Left = generalRight - _generalInfo.Width;
 
-            _scannerUnavailable.Left = Math.Max(34, _scannerPage.ClientSize.Width - 34 - _scannerUnavailable.Width);
+            _scannerIntro.Left = Math.Max(34, _scannerPage.ClientSize.Width - 34 - _scannerIntro.Width);
+            _scannerDeviceTitle.Left = Math.Max(34, _scannerPage.ClientSize.Width - 34 - _scannerDeviceTitle.Width);
+            _scannerDeviceValue.Left = Math.Max(34, _scannerPage.ClientSize.Width - 34 - _scannerDeviceValue.Width);
         }
         else
         {
@@ -381,7 +401,9 @@ public sealed class SettingsShellForm : Form
             _layoutsValue.Left = 34;
             _generalInfo.Left = 34;
 
-            _scannerUnavailable.Left = 34;
+            _scannerIntro.Left = 34;
+            _scannerDeviceTitle.Left = 34;
+            _scannerDeviceValue.Left = 34;
         }
 
         _pageTitle.RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
@@ -444,6 +466,12 @@ public sealed class SettingsShellForm : Form
         Close();
     }
 
+    private void BeginScannerDetection()
+    {
+        _scanner.BeginIdentification();
+        _scannerScanBox.Text = UiText.Get("scanner_waiting");
+    }
+
     private void OnScannerIdentified(ScannerDeviceInfo device)
     {
         if (IsDisposed) return;
@@ -454,7 +482,8 @@ public sealed class SettingsShellForm : Form
             _settings.ScannerProductId = device.ProductId;
             _settings.ScannerDisplayName = device.DisplayName;
             _scannerEnabled.Checked = true;
-            _scannerUnavailable.Text = $"{UiText.Get("scanner_detected")}: {device.DisplayName}";
+            _scannerScanBox.Text = UiText.Get("scanner_detected");
+            _scannerDeviceValue.Text = device.DisplayName + (string.IsNullOrEmpty(device.VendorId) ? "" : $"\r\nVID_{device.VendorId} / PID_{device.ProductId}");
         });
     }
 
@@ -498,7 +527,10 @@ public sealed class SettingsShellForm : Form
         _changeLog.Text = UiText.Get("changelog");
         _clearLog.Text = UiText.Get("open_log");
 
-        _scannerUnavailable.Text = UiText.Get("temporarily_unavailable");
+        _scannerIntro.Text = UiText.Get("scanner_intro");
+        _scannerScanBox.Text = UiText.Get("scanner_scan_here");
+        _scannerDeviceTitle.Text = UiText.Get("scanner_device");
+        _scannerDeviceValue.Text = string.IsNullOrEmpty(_settings.ScannerDevicePath) ? UiText.Get("scanner_not_configured") : _settings.ScannerDisplayName;
         _scannerEnabled.Text = UiText.Get("scanner_enable");
         _detectScanner.Text = UiText.Get("scanner_start_detect");
 
