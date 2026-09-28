@@ -24,5 +24,7 @@ internal sealed class TextReplacementOperation
     public uint LastObservedClipboardSequence { get; set; }
     public uint RestoreSnapshotSequence { get; set; }
     public uint OurPasteClipboardSequence { get; set; }
+    public uint LastWordSearchClipboardSequence { get; set; }
+    public bool LastWordSearchClipboardContainsSourceText { get; set; }
 }
 
