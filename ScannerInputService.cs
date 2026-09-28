@@ -35,7 +35,11 @@ public sealed class ScannerInputService : IDisposable
     {
         var timer = Stopwatch.StartNew();
         uint size = 0, headerSize = (uint)Marshal.SizeOf<RAWINPUTHEADER>();
-        if (GetRawInputData(handle, RidInput, IntPtr.Zero, ref size, headerSize) == 0 || size == 0) return;
+        // With a null data buffer, GetRawInputData returns zero by design and writes
+        // the required byte count to size. Only the populated size decides whether
+        // there is a Raw Input payload to read.
+        GetRawInputData(handle, RidInput, IntPtr.Zero, ref size, headerSize);
+        if (size == 0) return;
         IntPtr buffer = Marshal.AllocHGlobal((int)size);
         try
         {
