@@ -27,9 +27,13 @@ internal static class KeyboardInputService
     public static bool SelectAll() => SendChord(VK_CONTROL, VK_A);
     public static bool Copy() => SendChord(VK_CONTROL, VK_C);
     public static bool Paste() => SendChord(VK_CONTROL, VK_V);
-    public static bool SelectPreviousWord() => SendChord(VK_CONTROL, VK_SHIFT, VK_LEFT);
+    public static bool SelectPreviousWord(LastWordSearchDirection direction) =>
+        SendChord(VK_CONTROL, VK_SHIFT, direction == LastWordSearchDirection.Left ? VK_LEFT : VK_RIGHT);
     public static bool CollapseSelectionToStart() => SendRepeatedKey(VK_LEFT, 1, shift: false);
+    public static bool CollapseSelectionToEnd() => SendRepeatedKey(VK_RIGHT, 1, shift: false);
+    public static bool MoveCaretLeft(int count) => SendRepeatedKey(VK_LEFT, count, shift: false);
     public static bool MoveCaretRight(int count) => SendRepeatedKey(VK_RIGHT, count, shift: false);
+    public static bool SelectCharactersLeft(int count) => SendRepeatedKey(VK_LEFT, count, shift: true);
     public static bool SelectCharactersRight(int count) => SendRepeatedKey(VK_RIGHT, count, shift: true);
 
     private static bool SendChord(int modifier, int key)
