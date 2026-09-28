@@ -95,6 +95,7 @@ internal static class TextReplacementService
             operation.CopyTextHash = copyResult.TextHash;
             operation.CopyTextLength = copyResult.Text.Length;
             operation.LastObservedClipboardSequence = copyResult.LastSequence;
+            operation.LastWordSearchClipboardContainsSourceText = false;
             clipboardContainsOurData = copyResult.ClipboardContainsSourceText;
             if (copyResult.NewExternalSnapshot != null)
             {
@@ -188,11 +189,13 @@ internal static class TextReplacementService
         }
         finally
         {
-            if (clipboardContainsOurData)
+            if (clipboardContainsOurData || operation.LastWordSearchClipboardContainsSourceText)
                 LogRestoreResult(ClipboardService.RestoreIfUnchanged(operation.RestoreSnapshot,
                     operation.OurPasteClipboardSequence != 0
                         ? operation.OurPasteClipboardSequence
-                        : operation.LastObservedClipboardSequence), "during cleanup");
+                        : operation.LastWordSearchClipboardContainsSourceText
+                            ? operation.LastWordSearchClipboardSequence
+                            : operation.LastObservedClipboardSequence), "during cleanup");
             Log($"Operation result: operation={operation.Id:N}, pasted={pasted}, elapsed={total.ElapsedMilliseconds} ms");
             Log("========== END ==========" + Environment.NewLine);
             Volatile.Write(ref _running, 0);
@@ -279,19 +282,18 @@ internal static class TextReplacementService
             operation.RestoreSnapshotSequence = copyResult.NewExternalSnapshotSequence;
         }
 
-        if (!copyResult.ClipboardContainsSourceText)
-            return true;
-
-        ClipboardRestoreResult restoreResult = ClipboardService.RestoreIfUnchanged(
-            operation.RestoreSnapshot, copyResult.LastSequence, out uint restoredSequence);
-        LogRestoreResult(restoreResult, "after LastWord search Copy");
-        if (restoreResult == ClipboardRestoreResult.Restored)
+        if (copyResult.ClipboardContainsSourceText)
         {
-            operation.RestoreSnapshotSequence = restoredSequence;
-            return true;
+            operation.LastWordSearchClipboardSequence = copyResult.LastSequence;
+            operation.LastWordSearchClipboardContainsSourceText = true;
+            Log($"LastWord search Copy retained until search completes: sequence={copyResult.LastSequence}");
         }
-        return restoreResult == ClipboardRestoreResult.SkippedBecauseChanged &&
-            TryAdoptCurrentClipboard(operation, "during LastWord search restore");
+        else
+        {
+            operation.LastWordSearchClipboardContainsSourceText = false;
+        }
+
+        return true;
     }
 
     private static bool SelectExactLastWordFragment(string temporarySelection,
