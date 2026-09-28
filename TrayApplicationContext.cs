@@ -13,6 +13,7 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly HotkeyService _lastWordHotkeyService;
     private readonly HotkeyService _selectedTextHotkeyService;
     private readonly AppSettings _settings;
+    private readonly ScannerInputService _scanner;
     private readonly System.Windows.Forms.Timer _hotkeyTimer;
     private TextReplacementOperationType? _queuedOperation;
 
@@ -23,6 +24,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         _settings = AppSettings.Load();
         UiText.Language = _settings.Language;
         StartupManager.SetEnabled(_settings.StartWithWindows);
+        _scanner = new ScannerInputService(_settings);
         _appIcon = AppAssets.GetIcon();
         _tray = new NotifyIcon
         {
@@ -97,13 +99,14 @@ public sealed class TrayApplicationContext : ApplicationContext
 
     private void OpenSettings()
     {
-        using var form = new SettingsShellForm(_settings);
+        using var form = new SettingsShellForm(_settings, _scanner);
         if (form.ShowDialog() == DialogResult.OK)
         {
             UiText.Language = _settings.Language;
             _fullHotkeyService.Hotkey = _settings.FullTextHotkey;
             _lastWordHotkeyService.Hotkey = _settings.LastWordHotkey;
             _selectedTextHotkeyService.Hotkey = _settings.SelectedTextHotkey;
+            _scanner.ApplySettings(_settings);
             _tray.ContextMenuStrip = BuildMenu();
         }
     }
@@ -115,6 +118,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         _fullHotkeyService.Dispose();
         _lastWordHotkeyService.Dispose();
         _selectedTextHotkeyService.Dispose();
+        _scanner.Dispose();
         _tray.Visible = false;
         _tray.Dispose();
         _appIcon.Dispose();
