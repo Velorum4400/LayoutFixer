@@ -2,7 +2,7 @@
 
 Windows tray utility for correcting text typed with the wrong keyboard layout.
 
-## Current architecture (1.5.1)
+## Current architecture (1.6.0)
 
 The active application contains one correction command: **Correct all text**.
 At startup, LayoutFixer stores the Windows keyboard layouts in their system
@@ -24,9 +24,14 @@ The operation uses these independent components:
 - `LayoutConverter` transfers scan code and modifiers through the cached source
   and target maps. It does not use `VkKeyScanExW`.
 
-Converted text is pasted as one Clipboard value. The default controlled delay
-before safe Clipboard restoration is 100 ms. Diagnostics record stages,
-timings, handles, layout names and lengths without recording user text.
+Copied text is retained in process memory. Clipboard copy changes are observed
+until stable for 30 ms; repeated sequence changes with the same text hash are
+treated as one copy pipeline. A confirmed newer external Clipboard state becomes
+the new restore snapshot. The Clipboard is restored immediately after Copy,
+checked again before Paste, and restored after Paste only if LayoutFixer's value
+is still current. The default paste delay is 100 ms and is configurable in the
+replacement service. Diagnostics retain owner, process, formats, length and
+privacy-safe hash data without recording user text.
 
 The following settings remain visible as disabled placeholders and display
 **Temporarily unavailable**:

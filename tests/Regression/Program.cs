@@ -101,6 +101,53 @@ var staThread = new Thread(() =>
               ClipboardRestoreResult.Restored,
             "external-change test restores original Clipboard safely");
 
+        Check(ClipboardService.TryCaptureStable(out ClipboardSnapshot stabilizationSnapshot,
+                out _, out _), "Clipboard snapshot captured for stabilization tests");
+        Check(ClipboardService.TrySetText("stabilization baseline", out uint sameTextBefore),
+            "native Clipboard baseline written for stabilization tests");
+        var sameTextWriter = new Thread(() =>
+        {
+            Thread.Sleep(10);
+            ClipboardService.TrySetText("stable copied text", out _);
+            Thread.Sleep(15);
+            ClipboardService.TrySetText("stable copied text", out _);
+        });
+        sameTextWriter.SetApartmentState(ApartmentState.STA);
+        sameTextWriter.Start();
+        var sameTextTimer = System.Diagnostics.Stopwatch.StartNew();
+        bool sameTextStable = ClipboardService.WaitForStableCopy(sameTextBefore, sameTextTimer,
+                out ClipboardCopyResult sameTextResult);
+        sameTextWriter.Join();
+        Check(sameTextStable,
+            "multiple same-text Clipboard changes stabilize");
+        Check(sameTextResult.Text == "stable copied text" &&
+              sameTextResult.NewExternalSnapshot == null &&
+              sameTextResult.ChangeCount >= 2,
+            "same hash is treated as one Copy pipeline");
+
+        uint externalDuringCopyBefore = ClipboardService.SequenceNumber;
+        var externalDuringCopyWriter = new Thread(() =>
+        {
+            Thread.Sleep(10);
+            ClipboardService.TrySetText("source held in memory", out _);
+            Thread.Sleep(15);
+            ClipboardService.TrySetText("new external clipboard", out _);
+        });
+        externalDuringCopyWriter.SetApartmentState(ApartmentState.STA);
+        externalDuringCopyWriter.Start();
+        var externalDuringCopyTimer = System.Diagnostics.Stopwatch.StartNew();
+        Check(ClipboardService.WaitForStableCopy(externalDuringCopyBefore,
+                externalDuringCopyTimer, out ClipboardCopyResult externalDuringCopyResult),
+            "external Clipboard change during stabilization is captured");
+        externalDuringCopyWriter.Join();
+        Check(externalDuringCopyResult.Text == "source held in memory" &&
+              externalDuringCopyResult.NewExternalSnapshot != null &&
+              !externalDuringCopyResult.ClipboardContainsSourceText,
+            "source remains internal while external snapshot becomes restore state");
+        Check(ClipboardService.RestoreIfUnchanged(stabilizationSnapshot,
+                externalDuringCopyResult.LastSequence) == ClipboardRestoreResult.Restored,
+            "stabilization tests restore original Clipboard");
+
         using var viewer = new LogViewerForm();
         viewer.CreateControl();
         Check(!viewer.Controls.OfType<System.Windows.Forms.TabControl>().Any(), "scanner log tab remains removed");

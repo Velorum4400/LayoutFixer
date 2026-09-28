@@ -7,7 +7,7 @@ namespace LayoutFixer;
 
 internal static class TextReplacementService
 {
-    public const int PasteRestoreDelayMilliseconds = 100;
+    public static int PasteRestoreDelayMilliseconds { get; set; } = 100;
     private static int _running;
 
     public static IntPtr ForegroundWindow => GetForegroundWindow();
@@ -21,12 +21,10 @@ internal static class TextReplacementService
         }
 
         var total = Stopwatch.StartNew();
-        ClipboardSnapshot? snapshot = null;
-        bool ownsClipboard = false;
-        bool restorationHandled = false;
-        uint ownedSequence = 0;
+        var operation = new TextReplacementOperation { TargetWindow = targetWindow };
+        bool clipboardContainsOurData = false;
         bool pasted = false;
-        Log($"========== START mode=fullText, target=0x{targetWindow.ToInt64():X}");
+        Log($"========== START operation={operation.Id:N}, mode=fullText, target=0x{targetWindow.ToInt64():X}");
 
         try
         {
@@ -39,6 +37,8 @@ internal static class TextReplacementService
                 Log("FAIL: source or target layout could not be determined");
                 return false;
             }
+            operation.SourceLayout = sourceLayout;
+            operation.TargetLayout = targetLayout;
             Log($"Layouts: source={sourceLayout.DisplayName} (0x{sourceLayout.Handle.ToInt64():X}), target={targetLayout.DisplayName} (0x{targetLayout.Handle.ToInt64():X})");
             if (!KeyboardLayoutService.TryGetMap(sourceLayout, out KeyboardLayoutMap sourceMap) ||
                 !KeyboardLayoutService.TryGetMap(targetLayout, out KeyboardLayoutMap targetMap))
@@ -48,12 +48,15 @@ internal static class TextReplacementService
             }
 
             var clipboardTimer = Stopwatch.StartNew();
-            if (!ClipboardService.TryCapture(out snapshot))
+            if (!ClipboardService.TryCaptureStable(out ClipboardSnapshot initialSnapshot,
+                    out uint initialSnapshotSequence, out long snapshotElapsed))
             {
                 Log($"FAIL: Clipboard snapshot timeout after {clipboardTimer.ElapsedMilliseconds} ms");
                 return false;
             }
-            Log($"Clipboard snapshot captured: formats={snapshot.FormatCount}, elapsed={clipboardTimer.ElapsedMilliseconds} ms");
+            operation.RestoreSnapshot = initialSnapshot;
+            operation.RestoreSnapshotSequence = initialSnapshotSequence;
+            Log($"Clipboard snapshot captured: formats={initialSnapshot.FormatCount}, sequence={initialSnapshotSequence}, elapsed={snapshotElapsed} ms");
 
             if (!KeyboardInputService.SelectAll())
             {
@@ -74,46 +77,77 @@ internal static class TextReplacementService
             }
             Log("Ctrl+C sent");
 
-            bool copyCompleted = ClipboardService.WaitForTextChange(sequenceBeforeCopy,
-                out string sourceText, out ownedSequence, out long copyWait);
-            Log($"Clipboard copy wait: elapsed={copyWait} ms, changed={copyCompleted}");
-            if (!copyCompleted)
+            if (!ClipboardService.WaitForStableCopy(sequenceBeforeCopy, copyDispatchTimer,
+                    out ClipboardCopyResult copyResult))
             {
-                Log("FAIL: Clipboard copy timeout");
+                Log($"FAIL: Clipboard copy did not stabilize within {copyResult.ElapsedMilliseconds} ms");
                 return false;
             }
-            ownsClipboard = true;
-            Log($"Copy result: success=True, textLength={sourceText.Length}");
-            ClipboardDiagnostics.ObserveAfterCopy(copyDispatchTimer, sequenceBeforeCopy,
-                ownedSequence, copyWait);
+            operation.SourceText = copyResult.Text;
+            operation.CopyTextHash = copyResult.TextHash;
+            operation.CopyTextLength = copyResult.Text.Length;
+            operation.LastObservedClipboardSequence = copyResult.LastSequence;
+            clipboardContainsOurData = copyResult.ClipboardContainsSourceText;
+            if (copyResult.NewExternalSnapshot != null)
+            {
+                operation.RestoreSnapshot = copyResult.NewExternalSnapshot;
+                operation.RestoreSnapshotSequence = copyResult.NewExternalSnapshotSequence;
+            }
+            Log($"Clipboard copy stabilized: elapsed={copyResult.ElapsedMilliseconds} ms, changes={copyResult.ChangeCount}, sequence={copyResult.LastSequence}, textLength={operation.CopyTextLength}, textHash={operation.CopyTextHash}");
 
             if (GetForegroundWindow() != targetWindow)
                 return Fail("active window changed after text acquisition", targetWindow);
-            if (sourceText.Length == 0)
+            if (operation.SourceText.Length == 0)
             {
                 Log("CANCEL: active text field is empty or Clipboard contains no text");
                 return false;
             }
 
-            string convertedText = LayoutConverter.Convert(sourceText, sourceMap, targetMap, out int unchangedCount);
-            Log($"Conversion result: success=True, sourceLength={sourceText.Length}, convertedLength={convertedText.Length}, unchanged={unchangedCount}");
+            if (clipboardContainsOurData)
+            {
+                ClipboardRestoreResult earlyRestore = ClipboardService.RestoreIfUnchanged(
+                    operation.RestoreSnapshot, operation.LastObservedClipboardSequence,
+                    out uint restoredSequence);
+                LogRestoreResult(earlyRestore, "after Copy");
+                if (earlyRestore == ClipboardRestoreResult.Restored)
+                {
+                    operation.RestoreSnapshotSequence = restoredSequence;
+                    clipboardContainsOurData = false;
+                }
+                else if (earlyRestore == ClipboardRestoreResult.SkippedBecauseChanged)
+                {
+                    if (!TryAdoptCurrentClipboard(operation, "during early restore"))
+                        return false;
+                    clipboardContainsOurData = false;
+                }
+                else
+                    return false;
+            }
+            else
+            {
+                Log($"Clipboard early restore not required: current sequence={operation.RestoreSnapshotSequence} already represents the latest external snapshot");
+            }
+
+            operation.ConvertedText = LayoutConverter.Convert(operation.SourceText, sourceMap,
+                targetMap, out int unchangedCount);
+            Log($"Conversion result: success=True, sourceLength={operation.SourceText.Length}, convertedLength={operation.ConvertedText.Length}, unchanged={unchangedCount}");
 
             if (GetForegroundWindow() != targetWindow)
                 return Fail("active window changed before Clipboard write", targetWindow);
-            if (!ClipboardService.IsCurrentSequence(ownedSequence))
-            {
-                Log("CANCEL: Clipboard was changed by another process before converted text was written");
-                ownsClipboard = false;
+            if (!ClipboardService.IsCurrentSequence(operation.RestoreSnapshotSequence) &&
+                !TryAdoptCurrentClipboard(operation, "before Paste preparation"))
                 return false;
-            }
 
             clipboardTimer.Restart();
-            if (!ClipboardService.TrySetText(convertedText, out ownedSequence))
+            if (!ClipboardService.TrySetText(operation.ConvertedText,
+                    out uint pasteSequence))
             {
                 Log($"FAIL: converted text Clipboard write timeout after {clipboardTimer.ElapsedMilliseconds} ms");
                 return false;
             }
-            Log($"Converted text written to Clipboard: elapsed={clipboardTimer.ElapsedMilliseconds} ms, sequence={ownedSequence}");
+            operation.OurPasteClipboardSequence = pasteSequence;
+            clipboardContainsOurData = true;
+            Log($"Converted text written to Clipboard: elapsed={clipboardTimer.ElapsedMilliseconds} ms, sequence={operation.OurPasteClipboardSequence}");
 
             if (GetForegroundWindow() != targetWindow)
                 return Fail("active window changed immediately before Ctrl+V", targetWindow);
@@ -125,11 +159,11 @@ internal static class TextReplacementService
             pasted = true;
             Log("Ctrl+V sent: success=True");
 
-            Thread.Sleep(PasteRestoreDelayMilliseconds);
-            ClipboardRestoreResult restoreResult = ClipboardService.RestoreIfUnchanged(snapshot, ownedSequence);
-            restorationHandled = true;
-            ownsClipboard = false;
-            LogRestoreResult(restoreResult);
+            Thread.Sleep(Math.Max(0, PasteRestoreDelayMilliseconds));
+            ClipboardRestoreResult restoreResult = ClipboardService.RestoreIfUnchanged(
+                operation.RestoreSnapshot, operation.OurPasteClipboardSequence, out _);
+            LogRestoreResult(restoreResult, "after Paste");
+            clipboardContainsOurData = false;
 
             bool layoutSwitched = KeyboardLayoutService.SwitchLayout(targetWindow, targetLayout);
             Log($"Layout switch: success={layoutSwitched}, target={targetLayout.DisplayName}");
@@ -146,9 +180,12 @@ internal static class TextReplacementService
         }
         finally
         {
-            if (!restorationHandled && ownsClipboard && snapshot != null)
-                LogRestoreResult(ClipboardService.RestoreIfUnchanged(snapshot, ownedSequence));
-            Log($"Operation result: pasted={pasted}, elapsed={total.ElapsedMilliseconds} ms");
+            if (clipboardContainsOurData)
+                LogRestoreResult(ClipboardService.RestoreIfUnchanged(operation.RestoreSnapshot,
+                    operation.OurPasteClipboardSequence != 0
+                        ? operation.OurPasteClipboardSequence
+                        : operation.LastObservedClipboardSequence), "during cleanup");
+            Log($"Operation result: operation={operation.Id:N}, pasted={pasted}, elapsed={total.ElapsedMilliseconds} ms");
             Log("========== END ==========" + Environment.NewLine);
             Volatile.Write(ref _running, 0);
         }
@@ -160,18 +197,33 @@ internal static class TextReplacementService
         return false;
     }
 
-    private static void LogRestoreResult(ClipboardRestoreResult result)
+    private static bool TryAdoptCurrentClipboard(TextReplacementOperation operation, string stage)
     {
+        if (!ClipboardService.TryCaptureStable(out ClipboardSnapshot snapshot,
+                out uint sequence, out long elapsed))
+        {
+            Log($"CANCEL: Clipboard content changed unexpectedly {stage}; stable snapshot unavailable after {elapsed} ms");
+            return false;
+        }
+        operation.RestoreSnapshot = snapshot;
+        operation.RestoreSnapshotSequence = sequence;
+        Log($"New external Clipboard snapshot adopted {stage}: formats={snapshot.FormatCount}, sequence={sequence}, elapsed={elapsed} ms");
+        return true;
+    }
+
+    private static void LogRestoreResult(ClipboardRestoreResult result, string stage = "")
+    {
+        string suffix = string.IsNullOrEmpty(stage) ? string.Empty : $" {stage}";
         switch (result)
         {
             case ClipboardRestoreResult.Restored:
-                Log("Clipboard restore: success=True");
+                Log($"Clipboard restore{suffix}: success=True");
                 break;
             case ClipboardRestoreResult.SkippedBecauseChanged:
-                Log("Clipboard restore: skipped because Clipboard was changed by another process");
+                Log($"Clipboard restore{suffix}: skipped because Clipboard content changed unexpectedly");
                 break;
             default:
-                Log("Clipboard restore: failed after timeout");
+                Log($"Clipboard restore{suffix}: failed after timeout");
                 break;
         }
     }

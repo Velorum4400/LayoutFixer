@@ -42,6 +42,20 @@ public sealed class ChangeLogForm : Form
 
         Controls.Add(_changes);
 
+        AddVersion("v1.6.0", new[]
+        {
+            T(
+                "Full-text correction now keeps source and converted text in operation memory while using the Windows Clipboard only for bounded Copy and Paste transport.",
+                "Исправление всего текста теперь хранит исходный и преобразованный текст в памяти операции, используя Windows Clipboard только как ограниченный транспорт Copy и Paste.",
+                "תיקון הטקסט המלא שומר כעת את טקסט המקור והטקסט המומר בזיכרון הפעולה ומשתמש בלוח Windows רק להעברת Copy ו-Paste מוגבלת.")
+        }, new[]
+        {
+            T(
+                "Copy now waits for Clipboard stability, accepts repeated same-text sequence changes, adopts confirmed newer external Clipboard snapshots, and restores the Clipboard early without overwriting later data.",
+                "Copy теперь ждёт стабильности Clipboard, принимает повторные изменения sequence с тем же текстом, сохраняет подтверждённые новые внешние snapshots и рано восстанавливает Clipboard, не перезаписывая более поздние данные.",
+                "Copy ממתין כעת ליציבות הלוח, מקבל שינויי sequence חוזרים עם אותו טקסט, מאמץ snapshots חיצוניים חדשים שאושרו ומשחזר את הלוח מוקדם בלי לדרוס נתונים מאוחרים יותר.")
+        });
+
         AddVersion("v1.5.2", new[]
         {
             T(

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading;
 using System.Runtime.InteropServices;
 
 namespace LayoutFixer;
@@ -13,29 +12,14 @@ namespace LayoutFixer;
 internal static class ClipboardDiagnostics
 {
     public static readonly bool Enabled = true;
-    private const int ObservationMilliseconds = 450;
-    private const int PollMilliseconds = 5;
     private const uint CF_UNICODETEXT = 13;
 
-    public static void ObserveAfterCopy(Stopwatch copyStopwatch, uint sequenceBeforeCopy,
-        uint firstCopySequence, long firstCopyMilliseconds)
+    public static void LogChange(Stopwatch copyStopwatch, uint previousSequence,
+        uint currentSequence, string kind, long? observedAtMilliseconds = null)
     {
         if (!Enabled)
             return;
-
-        LogSnapshot(copyStopwatch, sequenceBeforeCopy, firstCopySequence, "first-change", firstCopyMilliseconds);
-        uint previousSequence = firstCopySequence;
-        while (copyStopwatch.ElapsedMilliseconds < ObservationMilliseconds)
-        {
-            uint currentSequence = ClipboardService.SequenceNumber;
-            if (currentSequence != previousSequence)
-            {
-                LogSnapshot(copyStopwatch, previousSequence, currentSequence, "subsequent-change", null);
-                previousSequence = currentSequence;
-            }
-            Thread.Sleep(PollMilliseconds);
-        }
-        DiagnosticLogStore.Write($"Clipboard diagnostic observation complete: duration={copyStopwatch.ElapsedMilliseconds} ms, finalSequence={previousSequence}");
+        LogSnapshot(copyStopwatch, previousSequence, currentSequence, kind, observedAtMilliseconds);
     }
 
     private static void LogSnapshot(Stopwatch stopwatch, uint oldSequence, uint newSequence,
