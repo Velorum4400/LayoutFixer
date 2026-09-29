@@ -29,5 +29,8 @@ internal sealed class TextReplacementOperation
     public uint LastWordSearchClipboardSequence { get; set; }
     public bool LastWordSearchClipboardContainsSourceText { get; set; }
     public string LastWordSearchFragment { get; set; } = string.Empty;
+    public string LastWordCandidateReplacement { get; set; } = string.Empty;
+    public int LastWordSearchSelectionLength { get; set; }
+    public bool LastWordDirectReplaceReady { get; set; }
 }
 
