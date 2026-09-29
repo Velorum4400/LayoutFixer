@@ -92,46 +92,53 @@ internal static class TextReplacementService
                 Log($"FAIL: selection preparation failed for OperationType={operation.Type}");
                 return false;
             }
-            if (operation.Type == TextReplacementOperationType.FullText)
-                Thread.Sleep(30);
-            if (GetForegroundWindow() != targetWindow)
-                return Fail("active window changed before Ctrl+C", targetWindow);
+            if (operation.Type == TextReplacementOperationType.LastWord)
+            {
+                if (!operation.LastWordDirectReplaceReady)
+                {
+                    Log("CANCEL: LastWord Direct Replace candidate was not prepared");
+                    return false;
+                }
 
-            uint sequenceBeforeCopy = ClipboardService.SequenceNumber;
-            var copyDispatchTimer = Stopwatch.StartNew();
-            if (!KeyboardInputService.Copy())
-            {
-                Log("FAIL: Ctrl+C SendInput failed");
-                return false;
+                operation.SourceText = operation.LastWordSearchFragment;
+                operation.ConvertedText = operation.LastWordCandidateReplacement;
+                operation.CopyTextLength = operation.SourceText.Length;
+                Log($"LastWord DIRECT-REPLACE paste: selectionLength={operation.LastWordSearchSelectionLength}, replacementLength={operation.ConvertedText.Length}");
             }
-            Log("Ctrl+C sent");
+            else
+            {
+                if (operation.Type == TextReplacementOperationType.FullText)
+                    Thread.Sleep(30);
+                if (GetForegroundWindow() != targetWindow)
+                    return Fail("active window changed before Ctrl+C", targetWindow);
 
-            if (!ClipboardService.WaitForStableCopy(sequenceBeforeCopy, copyDispatchTimer,
-                    out ClipboardCopyResult copyResult))
-            {
-                Log($"FAIL: Clipboard copy did not stabilize within {copyResult.ElapsedMilliseconds} ms");
-                return false;
+                uint sequenceBeforeCopy = ClipboardService.SequenceNumber;
+                var copyDispatchTimer = Stopwatch.StartNew();
+                if (!KeyboardInputService.Copy())
+                {
+                    Log("FAIL: Ctrl+C SendInput failed");
+                    return false;
+                }
+                Log("Ctrl+C sent");
+
+                if (!ClipboardService.WaitForStableCopy(sequenceBeforeCopy, copyDispatchTimer,
+                        out ClipboardCopyResult copyResult))
+                {
+                    Log($"FAIL: Clipboard copy did not stabilize within {copyResult.ElapsedMilliseconds} ms");
+                    return false;
+                }
+                operation.SourceText = copyResult.Text;
+                operation.CopyTextHash = copyResult.TextHash;
+                operation.CopyTextLength = copyResult.Text.Length;
+                operation.LastObservedClipboardSequence = copyResult.LastSequence;
+                clipboardContainsOurData = copyResult.ClipboardContainsSourceText;
+                if (copyResult.NewExternalSnapshot != null)
+                {
+                    operation.RestoreSnapshot = copyResult.NewExternalSnapshot;
+                    operation.RestoreSnapshotSequence = copyResult.NewExternalSnapshotSequence;
+                }
+                Log($"Clipboard copy stabilized: elapsed={copyResult.ElapsedMilliseconds} ms, changes={copyResult.ChangeCount}, sequence={copyResult.LastSequence}, textLength={operation.CopyTextLength}, textHash={operation.CopyTextHash}");
             }
-            LogLastWordCopyPerf("final-copy", copyResult, total);
-            operation.SourceText = copyResult.Text;
-            if (operation.Type == TextReplacementOperationType.LastWord &&
-                operation.LastWordSearchFragment.Length > 0)
-            {
-                bool matches = string.Equals(operation.LastWordSearchFragment, operation.SourceText,
-                    StringComparison.Ordinal);
-                Log($"LastWord DIRECT-REPLACE validation: fragmentMatchesFinalSource={matches}, searchFragmentLength={operation.LastWordSearchFragment.Length}, finalSourceLength={operation.SourceText.Length}");
-            }
-            operation.CopyTextHash = copyResult.TextHash;
-            operation.CopyTextLength = copyResult.Text.Length;
-            operation.LastObservedClipboardSequence = copyResult.LastSequence;
-            operation.LastWordSearchClipboardContainsSourceText = false;
-            clipboardContainsOurData = copyResult.ClipboardContainsSourceText;
-            if (copyResult.NewExternalSnapshot != null)
-            {
-                operation.RestoreSnapshot = copyResult.NewExternalSnapshot;
-                operation.RestoreSnapshotSequence = copyResult.NewExternalSnapshotSequence;
-            }
-            Log($"Clipboard copy stabilized: elapsed={copyResult.ElapsedMilliseconds} ms, changes={copyResult.ChangeCount}, sequence={copyResult.LastSequence}, textLength={operation.CopyTextLength}, textHash={operation.CopyTextHash}");
 
             if (GetForegroundWindow() != targetWindow)
                 return Fail("active window changed after text acquisition", targetWindow);
@@ -141,7 +148,7 @@ internal static class TextReplacementService
                 return false;
             }
 
-            if (clipboardContainsOurData)
+            if (operation.Type != TextReplacementOperationType.LastWord && clipboardContainsOurData)
             {
                 ClipboardRestoreResult earlyRestore = ClipboardService.RestoreIfUnchanged(
                     operation.RestoreSnapshot, operation.LastObservedClipboardSequence,
@@ -161,22 +168,30 @@ internal static class TextReplacementService
                 else
                     return false;
             }
-            else
+            else if (operation.Type != TextReplacementOperationType.LastWord)
             {
                 Log($"Clipboard early restore not required: current sequence={operation.RestoreSnapshotSequence} already represents the latest external snapshot");
             }
 
-            var convertTimer = Stopwatch.StartNew();
-            operation.ConvertedText = LayoutConverter.Convert(operation.SourceText, sourceMap,
-                targetMap, out int unchangedCount);
-            if (operation.Type == TextReplacementOperationType.LastWord)
-                Log($"LastWord PERF convert sourceLength={operation.SourceText.Length}, convertedLength={operation.ConvertedText.Length}, duration={convertTimer.ElapsedMilliseconds} ms, t={total.ElapsedMilliseconds} ms");
-            Log($"Conversion result: success=True, sourceLength={operation.SourceText.Length}, convertedLength={operation.ConvertedText.Length}, unchanged={unchangedCount}");
+            if (operation.Type != TextReplacementOperationType.LastWord)
+            {
+                operation.ConvertedText = LayoutConverter.Convert(operation.SourceText, sourceMap,
+                    targetMap, out int unchangedCount);
+                Log($"Conversion result: success=True, sourceLength={operation.SourceText.Length}, convertedLength={operation.ConvertedText.Length}, unchanged={unchangedCount}");
+            }
 
             if (GetForegroundWindow() != targetWindow)
                 return Fail("active window changed before Clipboard write", targetWindow);
-            if (!ClipboardService.IsCurrentSequence(operation.RestoreSnapshotSequence) &&
-                !TryAdoptCurrentClipboard(operation, "before Paste preparation"))
+            if (operation.Type == TextReplacementOperationType.LastWord)
+            {
+                if (!ClipboardService.IsCurrentSequence(operation.LastWordSearchClipboardSequence))
+                {
+                    Log("CANCEL: Clipboard changed after LastWord search selection; replacement was not written");
+                    return false;
+                }
+            }
+            else if (!ClipboardService.IsCurrentSequence(operation.RestoreSnapshotSequence) &&
+                     !TryAdoptCurrentClipboard(operation, "before Paste preparation"))
                 return false;
 
             clipboardTimer.Restart();
@@ -190,6 +205,7 @@ internal static class TextReplacementService
             if (operation.Type == TextReplacementOperationType.LastWord)
                 Log($"LastWord PERF paste clipboardWrite={writeTimer.ElapsedMilliseconds} ms, t={total.ElapsedMilliseconds} ms");
             operation.OurPasteClipboardSequence = pasteSequence;
+            operation.LastWordSearchClipboardContainsSourceText = false;
             clipboardContainsOurData = true;
             Log($"Converted text written to Clipboard: elapsed={clipboardTimer.ElapsedMilliseconds} ms, sequence={operation.OurPasteClipboardSequence}");
 
@@ -301,13 +317,9 @@ internal static class TextReplacementService
                 previousSelection != null && string.Equals(previousSelection, selection, StringComparison.Ordinal);
             if (analysis.BoundaryWhitespaceFound || reachedStartOfField)
             {
-                LogDirectReplacementDiagnostic(operation, selection, analysis,
-                    analysis.BoundaryWhitespaceFound ? "Whitespace" : "StartOfField");
-                var exactTimer = Stopwatch.StartNew();
-                if (!SelectExactLastWordFragment(selection, analysis, direction))
-                    return false;
-                Log($"LastWord PERF exact-selection direction={direction}, fragmentLength={analysis.FragmentLength}, duration={exactTimer.ElapsedMilliseconds} ms, t={total.ElapsedMilliseconds} ms");
                 string boundary = analysis.BoundaryWhitespaceFound ? "Whitespace" : "StartOfField";
+                if (!PrepareDirectReplacement(operation, selection, analysis, boundary, total))
+                    return false;
                 Log($"LastWord search completed: iterations={iteration}, fragmentLength={analysis.FragmentLength}, trailingWhitespace={analysis.TrailingWhitespaceLength}, boundary={boundary}");
                 return true;
             }
@@ -432,55 +444,30 @@ internal static class TextReplacementService
         }
     }
 
-    private static void LogDirectReplacementDiagnostic(TextReplacementOperation operation,
-        string selection, LastWordSelectionAnalysis analysis, string boundary)
+    private static bool PrepareDirectReplacement(TextReplacementOperation operation,
+        string selection, LastWordSelectionAnalysis analysis, string boundary, Stopwatch total)
     {
         string prefix = selection[..analysis.FragmentStart];
         string fragment = selection.Substring(analysis.FragmentStart, analysis.FragmentLength);
         string suffix = selection[(analysis.FragmentStart + analysis.FragmentLength)..];
+        var convertTimer = Stopwatch.StartNew();
         string converted = LayoutConverter.Convert(fragment, operation.SourceMap, operation.TargetMap,
             out _);
         string candidate = prefix + converted + suffix;
+        bool canReplace = analysis.HasFragment && fragment.Length > 0 &&
+            candidate.Length >= prefix.Length + suffix.Length;
+        Log($"LastWord DIRECT-REPLACE: boundary={boundary}, searchSelectionLength={selection.Length}, prefixLength={prefix.Length}, fragmentLength={fragment.Length}, suffixLength={suffix.Length}, convertedFragmentLength={converted.Length}, candidateReplacementLength={candidate.Length}, canReplaceSearchSelection={canReplace}, searchSelectionHash={ClipboardService.HashText(selection)}, candidateReplacementHash={ClipboardService.HashText(candidate)}");
+        Log($"LastWord PERF convert sourceLength={fragment.Length}, convertedLength={converted.Length}, duration={convertTimer.ElapsedMilliseconds} ms, t={total.ElapsedMilliseconds} ms");
+        if (!canReplace)
+        {
+            Log("CANCEL: LastWord Direct Replace candidate is invalid");
+            return false;
+        }
+
         operation.LastWordSearchFragment = fragment;
-        bool canReplace = candidate.Length >= prefix.Length + suffix.Length;
-        Log($"LastWord DIRECT-REPLACE diagnostic: boundary={boundary}, searchSelectionLength={selection.Length}, prefixLength={prefix.Length}, fragmentLength={fragment.Length}, suffixLength={suffix.Length}, candidateReplacementLength={candidate.Length}, canReplaceSearchSelection={canReplace}, searchSelectionHash={ClipboardService.HashText(selection)}, candidateReplacementHash={ClipboardService.HashText(candidate)}");
-    }
-
-    private static bool SelectExactLastWordFragment(string temporarySelection,
-        LastWordSelectionAnalysis analysis, LastWordSearchDirection direction)
-    {
-        int fragmentSteps = LastWordSelectionAnalyzer.CountTextElements(
-            temporarySelection.Substring(analysis.FragmentStart, analysis.FragmentLength));
-        if (fragmentSteps == 0)
-            return false;
-
-        if (direction == LastWordSearchDirection.Left)
-        {
-            int trailingSteps = LastWordSelectionAnalyzer.CountTextElements(
-                temporarySelection[(analysis.FragmentStart + analysis.FragmentLength)..]);
-            if (!KeyboardInputService.CollapseSelectionToEnd() ||
-                !KeyboardInputService.MoveCaretLeft(trailingSteps) ||
-                !KeyboardInputService.SelectCharactersLeft(fragmentSteps))
-            {
-                Log("FAIL: LastWord search could not create exact Left fragment selection");
-                return false;
-            }
-            Log($"LastWord exact selection sent: direction=Left, fragmentSteps={fragmentSteps}");
-            Thread.Sleep(15);
-            return true;
-        }
-
-        int prefixSteps = LastWordSelectionAnalyzer.CountTextElements(
-            temporarySelection[..analysis.FragmentStart]);
-        if (!KeyboardInputService.CollapseSelectionToStart() ||
-            !KeyboardInputService.MoveCaretRight(prefixSteps) ||
-            !KeyboardInputService.SelectCharactersRight(fragmentSteps))
-        {
-            Log("FAIL: LastWord search could not create exact Right fragment selection");
-            return false;
-        }
-        Log($"LastWord exact selection sent: direction=Right, prefixSteps={prefixSteps}, fragmentSteps={fragmentSteps}");
-        Thread.Sleep(15);
+        operation.LastWordCandidateReplacement = candidate;
+        operation.LastWordSearchSelectionLength = selection.Length;
+        operation.LastWordDirectReplaceReady = true;
         return true;
     }
 
