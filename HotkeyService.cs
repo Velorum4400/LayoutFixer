@@ -24,6 +24,7 @@ public sealed class HotkeyService : IDisposable
     private bool _modifierOnly = true;
 
     public event Action? Pressed;
+    public IntPtr HookHandle => _hook;
     public string Hotkey
     {
         get => _hotkey;
@@ -46,6 +47,7 @@ public sealed class HotkeyService : IDisposable
         _hook = SetWindowsHookEx(WH_KEYBOARD_LL, _callback, GetModuleHandle(module?.ModuleName), 0);
         if (_hook == IntPtr.Zero)
             throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+        DiagnosticLogStore.Write($"HotkeyService Register: hotkey={_hotkey}, hook=0x{_hook.ToInt64():X}, result=True");
     }
 
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
@@ -87,6 +89,7 @@ public sealed class HotkeyService : IDisposable
             if (_pending != null && !_pending.Overlaps(_pressed))
             {
                 _pending = null;
+                DiagnosticLogStore.Write($"Hotkey pressed: hotkey={_hotkey}, hook=0x{_hook.ToInt64():X}");
                 Pressed?.Invoke();
             }
             if (suppress) return (IntPtr)1;
@@ -94,7 +97,12 @@ public sealed class HotkeyService : IDisposable
         return CallNextHookEx(_hook, nCode, wParam, lParam);
     }
 
-    public void Dispose() { if (_hook != IntPtr.Zero) UnhookWindowsHookEx(_hook); }
+    public void Dispose()
+    {
+        if (_hook == IntPtr.Zero) return;
+        bool result = UnhookWindowsHookEx(_hook);
+        DiagnosticLogStore.Write($"HotkeyService Unregister: hotkey={_hotkey}, hook=0x{_hook.ToInt64():X}, result={result}");
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct KBDLLHOOKSTRUCT
