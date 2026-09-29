@@ -8,6 +8,7 @@ public sealed class LogViewerForm : Form
 {
     private readonly TextBox _text = CreateLogBox();
     private readonly TextBox _scannerText = CreateLogBox();
+    private readonly TextBox _hotkeyWatchdogText = CreateLogBox();
     private readonly System.Windows.Forms.Timer _refresh = new() { Interval = 1000 };
 
     public LogViewerForm()
@@ -24,6 +25,8 @@ public sealed class LogViewerForm : Form
         {
             try { System.IO.File.WriteAllText(ScannerDiagnosticLog.LogPath, string.Empty); } catch { }
         }));
+        tabs.TabPages.Add(CreateTab(UiText.Get("hotkey_watchdog"), _hotkeyWatchdogText,
+            HotkeyWatchdogLog.Clear));
         Controls.Add(tabs);
         _refresh.Tick += (_, _) => RefreshLog();
         Shown += (_, _) => { RefreshLog(); _refresh.Start(); };
@@ -33,6 +36,7 @@ public sealed class LogViewerForm : Form
         RefreshBox(_text, () => DiagnosticLogStore.Read());
         RefreshBox(_scannerText, () => System.IO.File.Exists(ScannerDiagnosticLog.LogPath)
             ? System.IO.File.ReadAllText(ScannerDiagnosticLog.LogPath) : string.Empty);
+        RefreshBox(_hotkeyWatchdogText, HotkeyWatchdogLog.Read);
     }
     private static TextBox CreateLogBox() => new()
     {
