@@ -33,6 +33,9 @@ internal sealed class ClipboardCopyResult
     public ClipboardSnapshot? NewExternalSnapshot { get; init; }
     public uint NewExternalSnapshotSequence { get; init; }
     public bool ClipboardContainsSourceText { get; init; }
+    public long FirstChangeDelayMilliseconds { get; init; } = -1;
+    public long StabilizationDelayMilliseconds { get; init; }
+    public long ReadTextMilliseconds { get; init; }
 }
 
 internal static class ClipboardService
@@ -170,6 +173,7 @@ internal static class ClipboardService
         ClipboardSnapshot? externalSnapshot = null;
         uint externalSnapshotSequence = 0;
         bool clipboardContainsSourceText = false;
+        long firstChangeDelay = -1, readTextMilliseconds = 0;
 
         while (copyTimer.ElapsedMilliseconds < AccessTimeoutMilliseconds)
         {
@@ -177,15 +181,18 @@ internal static class ClipboardService
             if (currentSequence != lastSequence)
             {
                 changes++;
+                if (firstChangeDelay < 0) firstChangeDelay = copyTimer.ElapsedMilliseconds;
                 string kind = sourceCaptured ? "subsequent-change" : "first-change";
                 ClipboardDiagnostics.LogChange(copyTimer, lastSequence, currentSequence, kind);
                 lastSequence = currentSequence;
                 stableSince = copyTimer.ElapsedMilliseconds;
 
                 int remaining = Math.Max(1, AccessTimeoutMilliseconds - (int)copyTimer.ElapsedMilliseconds);
+                long readStart = copyTimer.ElapsedMilliseconds;
                 if (!TryReadUnicodeTextStable(out bool hasUnicodeText, out string observedText,
                         out uint observedSequence, remaining))
                     continue;
+                readTextMilliseconds += copyTimer.ElapsedMilliseconds - readStart;
                 if (observedSequence != currentSequence)
                 {
                     changes++;
@@ -244,6 +251,9 @@ internal static class ClipboardService
                     NewExternalSnapshot = externalSnapshot,
                     NewExternalSnapshotSequence = externalSnapshotSequence,
                     ClipboardContainsSourceText = clipboardContainsSourceText
+                    , FirstChangeDelayMilliseconds = firstChangeDelay
+                    , StabilizationDelayMilliseconds = Math.Max(0, copyTimer.ElapsedMilliseconds - Math.Max(0, firstChangeDelay))
+                    , ReadTextMilliseconds = readTextMilliseconds
                 };
                 return true;
             }
