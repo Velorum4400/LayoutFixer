@@ -19,7 +19,7 @@ public sealed class LogViewerForm : Form
         MinimumSize = new Size(600, 360);
         Font = new Font("Segoe UI", 10);
         var tabs = new TabControl { Dock = DockStyle.Fill };
-        tabs.TabPages.Add(CreateTab(UiText.Get("open_log"), _text, () => DiagnosticLogStore.Clear()));
+        tabs.TabPages.Add(CreateTab(UiText.Get("open_log"), _text, ClearDiagnosticLog));
         tabs.TabPages.Add(CreateTab(UiText.Get("scanner_section"), _scannerText, () =>
         {
             try { System.IO.File.WriteAllText(ScannerDiagnosticLog.LogPath, string.Empty); } catch { }
@@ -45,6 +45,14 @@ public sealed class LogViewerForm : Form
         var clear = new Button { Text = UiText.Get("clear_log"), Dock = DockStyle.Bottom, Height = 38 };
         clear.Click += (_, _) => { clearAction(); RefreshLog(); };
         page.Controls.Add(box); page.Controls.Add(clear); return page;
+    }
+    private void ClearDiagnosticLog()
+    {
+        DiagnosticLogStore.Clear();
+        // The clear itself removes any preceding START entry, so retain both lifecycle
+        // markers in the freshly created log.
+        DiagnosticLogStore.Write("ClearLog START");
+        DiagnosticLogStore.Write("ClearLog END");
     }
     private void RefreshBox(TextBox box, Func<string> read)
     {
