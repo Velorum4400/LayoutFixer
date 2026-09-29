@@ -56,6 +56,8 @@ internal static class TextReplacementService
                 Log("FAIL: source or target keyboard layout map is unavailable");
                 return false;
             }
+            operation.SourceMap = sourceMap;
+            operation.TargetMap = targetMap;
 
             var clipboardTimer = Stopwatch.StartNew();
             if (!ClipboardService.TryCaptureStable(out ClipboardSnapshot initialSnapshot,
@@ -95,6 +97,13 @@ internal static class TextReplacementService
             }
             LogLastWordCopyPerf("final-copy", copyResult, total);
             operation.SourceText = copyResult.Text;
+            if (operation.Type == TextReplacementOperationType.LastWord &&
+                operation.LastWordSearchFragment.Length > 0)
+            {
+                bool matches = string.Equals(operation.LastWordSearchFragment, operation.SourceText,
+                    StringComparison.Ordinal);
+                Log($"LastWord DIRECT-REPLACE validation: fragmentMatchesFinalSource={matches}, searchFragmentLength={operation.LastWordSearchFragment.Length}, finalSourceLength={operation.SourceText.Length}");
+            }
             operation.CopyTextHash = copyResult.TextHash;
             operation.CopyTextLength = copyResult.Text.Length;
             operation.LastObservedClipboardSequence = copyResult.LastSequence;
@@ -275,6 +284,8 @@ internal static class TextReplacementService
                 previousSelection != null && string.Equals(previousSelection, selection, StringComparison.Ordinal);
             if (analysis.BoundaryWhitespaceFound || reachedStartOfField)
             {
+                LogDirectReplacementDiagnostic(operation, selection, analysis,
+                    analysis.BoundaryWhitespaceFound ? "Whitespace" : "StartOfField");
                 var exactTimer = Stopwatch.StartNew();
                 if (!SelectExactLastWordFragment(selection, analysis, direction))
                     return false;
@@ -402,6 +413,20 @@ internal static class TextReplacementService
             operation.LastWordSearchClipboardSequence = copyResult.LastSequence;
             Log($"LastWord search Copy retained until search completes: sequence={copyResult.LastSequence}");
         }
+    }
+
+    private static void LogDirectReplacementDiagnostic(TextReplacementOperation operation,
+        string selection, LastWordSelectionAnalysis analysis, string boundary)
+    {
+        string prefix = selection[..analysis.FragmentStart];
+        string fragment = selection.Substring(analysis.FragmentStart, analysis.FragmentLength);
+        string suffix = selection[(analysis.FragmentStart + analysis.FragmentLength)..];
+        string converted = LayoutConverter.Convert(fragment, operation.SourceMap, operation.TargetMap,
+            out _);
+        string candidate = prefix + converted + suffix;
+        operation.LastWordSearchFragment = fragment;
+        bool canReplace = candidate.Length >= prefix.Length + suffix.Length;
+        Log($"LastWord DIRECT-REPLACE diagnostic: boundary={boundary}, searchSelectionLength={selection.Length}, prefixLength={prefix.Length}, fragmentLength={fragment.Length}, suffixLength={suffix.Length}, candidateReplacementLength={candidate.Length}, canReplaceSearchSelection={canReplace}, searchSelectionHash={ClipboardService.HashText(selection)}, candidateReplacementHash={ClipboardService.HashText(candidate)}");
     }
 
     private static bool SelectExactLastWordFragment(string temporarySelection,
