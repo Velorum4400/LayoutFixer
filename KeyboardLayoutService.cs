@@ -185,10 +185,14 @@ public static class KeyboardLayoutService
         if (targetWindow == IntPtr.Zero || target.Handle == IntPtr.Zero)
             return false;
 
-        bool sent = PostMessage(targetWindow, WM_INPUTLANGCHANGEREQUEST, IntPtr.Zero, target.Handle);
-        IntPtr focus = GetFocusedWindow(targetWindow);
-        if (focus != IntPtr.Zero && focus != targetWindow)
-            sent = PostMessage(focus, WM_INPUTLANGCHANGEREQUEST, IntPtr.Zero, target.Handle) || sent;
+        IntPtr inputContextWindow = GetInputContextWindow(targetWindow);
+        // The focused editor owns the active input context in applications such as
+        // modern Notepad. Request the change there first, then notify the top-level
+        // window as a compatibility fallback for traditional applications.
+        bool sent = inputContextWindow != IntPtr.Zero &&
+            PostMessage(inputContextWindow, WM_INPUTLANGCHANGEREQUEST, IntPtr.Zero, target.Handle);
+        if (inputContextWindow != targetWindow)
+            sent = PostMessage(targetWindow, WM_INPUTLANGCHANGEREQUEST, IntPtr.Zero, target.Handle) || sent;
         return sent;
     }
 
@@ -204,7 +208,8 @@ public static class KeyboardLayoutService
     {
         if (window == IntPtr.Zero)
             return IntPtr.Zero;
-        uint threadId = GetWindowThreadProcessId(window, IntPtr.Zero);
+        IntPtr inputContextWindow = GetInputContextWindow(window);
+        uint threadId = GetWindowThreadProcessId(inputContextWindow, IntPtr.Zero);
         return GetKeyboardLayout(threadId);
     }
 
@@ -223,11 +228,14 @@ public static class KeyboardLayoutService
         }
     }
 
-    private static IntPtr GetFocusedWindow(IntPtr foreground)
+    private static IntPtr GetInputContextWindow(IntPtr foreground)
     {
         uint threadId = GetWindowThreadProcessId(foreground, IntPtr.Zero);
         var info = new GUITHREADINFO { cbSize = (uint)Marshal.SizeOf<GUITHREADINFO>() };
-        return GetGUIThreadInfo(threadId, ref info) ? info.hwndFocus : IntPtr.Zero;
+        if (!GetGUIThreadInfo(threadId, ref info)) return foreground;
+        if (info.hwndFocus != IntPtr.Zero) return info.hwndFocus;
+        if (info.hwndCaret != IntPtr.Zero) return info.hwndCaret;
+        return foreground;
     }
 
     [StructLayout(LayoutKind.Sequential)]
