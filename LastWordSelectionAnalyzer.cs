@@ -1,5 +1,4 @@
 using System;
-using System.Globalization;
 
 namespace LayoutFixer;
 
@@ -30,8 +29,5 @@ internal static class LastWordSelectionAnalyzer
         return new LastWordSelectionAnalysis(fragmentStart, fragmentLength,
             selection.Length - contentEnd, boundaryWhitespace, hasFragment);
     }
-
-    public static int CountTextElements(string value) =>
-        value.Length == 0 ? 0 : StringInfo.ParseCombiningCharacters(value).Length;
 }
 
