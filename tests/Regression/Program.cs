@@ -75,11 +75,11 @@ Check(typeof(KeyboardInputService).GetMethod("SelectAll") != null,
     "SendInput chords are isolated in KeyboardInputService");
 Check(typeof(KeyboardInputService).GetMethod("SelectPreviousWord") != null,
     "last-word selection chord is isolated in KeyboardInputService");
-Check(typeof(KeyboardInputService).GetMethod("CollapseSelectionToStart") != null &&
-      typeof(KeyboardInputService).GetMethod("CollapseSelectionToEnd") != null &&
-      typeof(KeyboardInputService).GetMethod("SelectCharactersLeft") != null &&
-      typeof(KeyboardInputService).GetMethod("SelectCharactersRight") != null,
-    "exact last-word selection controls are isolated in KeyboardInputService");
+Check(typeof(KeyboardInputService).GetMethod("CollapseSelectionToStart") == null &&
+      typeof(KeyboardInputService).GetMethod("CollapseSelectionToEnd") == null &&
+      typeof(KeyboardInputService).GetMethod("SelectCharactersLeft") == null &&
+      typeof(KeyboardInputService).GetMethod("SelectCharactersRight") == null,
+    "obsolete exact last-word selection controls are removed");
 Check(Enum.GetValues<LastWordSearchDirection>().SequenceEqual(new[]
       { LastWordSearchDirection.Left, LastWordSearchDirection.Right }),
     "last-word search supports Left and Right directions");
