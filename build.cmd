@@ -1,6 +1,8 @@
 @echo off
 setlocal
 
+taskkill /IM LayoutFixer.exe /F >nul 2>&1
+
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0build.ps1"
 set "BUILD_EXIT=%ERRORLEVEL%"
 
@@ -15,4 +17,6 @@ if not "%BUILD_EXIT%"=="0" (
     exit /b %BUILD_EXIT%
 )
 
+start "" "%~dp0bin\Release\net8.0-windows\LayoutFixer.exe"
 exit /b 0
+
