@@ -41,6 +41,18 @@ internal static class TextReplacementService
             if (targetWindow == IntPtr.Zero || GetForegroundWindow() != targetWindow)
                 return Fail("active window changed before operation started", targetWindow);
 
+            if (operation.Type == TextReplacementOperationType.LastWord)
+            {
+                LayoutResolutionDiagnostic diagnostic = KeyboardLayoutService.GetResolutionDiagnostic(targetWindow);
+                Log("LAYOUT DIAGNOSTIC BEGIN");
+                Log($"ForegroundWindow=0x{GetForegroundWindow().ToInt64():X}, TargetWindow=0x{diagnostic.TargetWindow.ToInt64():X}");
+                Log($"ForegroundWindowProcessId={diagnostic.TargetProcessId}, ForegroundWindowThreadId={diagnostic.TargetThreadId}");
+                Log($"CurrentProcessId={diagnostic.CurrentProcessId}, CurrentThreadId={diagnostic.CurrentThreadId}");
+                Log($"GetKeyboardLayout(foregroundThreadId)=0x{diagnostic.TargetThreadLayout.ToInt64():X}");
+                Log($"GetKeyboardLayout(currentThreadId)=0x{diagnostic.CurrentThreadLayout.ToInt64():X}");
+                Log($"CachedLayouts=[{diagnostic.CachedLayouts}]");
+            }
+
             if (!KeyboardLayoutService.TryGetCurrentAndNext(targetWindow,
                 out KeyboardLayoutInfo sourceLayout, out KeyboardLayoutInfo targetLayout))
             {
@@ -49,6 +61,8 @@ internal static class TextReplacementService
             }
             operation.SourceLayout = sourceLayout;
             operation.TargetLayout = targetLayout;
+            if (operation.Type == TextReplacementOperationType.LastWord)
+                Log($"ResolvedSourceLayout={sourceLayout.DisplayName} (0x{sourceLayout.Handle.ToInt64():X}), ResolvedTargetLayout={targetLayout.DisplayName} (0x{targetLayout.Handle.ToInt64():X}){Environment.NewLine}LAYOUT DIAGNOSTIC END");
             Log($"Layouts: source={sourceLayout.DisplayName} (0x{sourceLayout.Handle.ToInt64():X}), target={targetLayout.DisplayName} (0x{targetLayout.Handle.ToInt64():X})");
             if (!KeyboardLayoutService.TryGetMap(sourceLayout, out KeyboardLayoutMap sourceMap) ||
                 !KeyboardLayoutService.TryGetMap(targetLayout, out KeyboardLayoutMap targetMap))
