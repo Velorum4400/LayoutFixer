@@ -94,6 +94,8 @@ public sealed class TrayApplicationContext : ApplicationContext
     private static void RunCorrection(TextReplacementOperationType operation)
     {
         IntPtr target = TextReplacementService.ForegroundWindow;
+        if (operation == TextReplacementOperationType.LastWord)
+            DiagnosticLogStore.Write($"LastWord hotkey target capture: foreground=0x{target.ToInt64():X}");
         CorrectionWorker.TryRun(() => TextReplacementService.TryReplaceText(target, operation));
     }
 
