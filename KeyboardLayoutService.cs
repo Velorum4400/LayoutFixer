@@ -12,6 +12,9 @@ public sealed record KeyboardLayoutDiagnostic(uint TargetThreadId, uint LayoutFi
 public sealed record LayoutResolutionDiagnostic(IntPtr TargetWindow, uint TargetProcessId,
     uint TargetThreadId, uint CurrentProcessId, uint CurrentThreadId, IntPtr TargetThreadLayout,
     IntPtr CurrentThreadLayout, string CachedLayouts);
+public sealed record GuiInputContextDiagnostic(IntPtr FocusWindow, uint FocusProcessId,
+    uint FocusThreadId, IntPtr FocusThreadLayout, IntPtr CaretWindow, uint CaretProcessId,
+    uint CaretThreadId, IntPtr CaretThreadLayout, bool QuerySucceeded);
 
 public static class KeyboardLayoutService
 {
@@ -153,6 +156,22 @@ public static class KeyboardLayoutService
         return new LayoutResolutionDiagnostic(targetWindow, targetProcessId, targetThreadId,
             (uint)System.Diagnostics.Process.GetCurrentProcess().Id, currentThreadId,
             GetKeyboardLayout(targetThreadId), GetKeyboardLayout(currentThreadId), cached);
+    }
+
+    public static GuiInputContextDiagnostic GetGuiInputContextDiagnostic(uint targetThreadId)
+    {
+        var info = new GUITHREADINFO { cbSize = (uint)Marshal.SizeOf<GUITHREADINFO>() };
+        if (targetThreadId == 0 || !GetGUIThreadInfo(targetThreadId, ref info))
+            return new GuiInputContextDiagnostic(IntPtr.Zero, 0, 0, IntPtr.Zero,
+                IntPtr.Zero, 0, 0, IntPtr.Zero, false);
+        uint focusProcessId = 0, caretProcessId = 0;
+        uint focusThreadId = info.hwndFocus == IntPtr.Zero ? 0 :
+            GetWindowThreadProcessIdForDiagnostic(info.hwndFocus, out focusProcessId);
+        uint caretThreadId = info.hwndCaret == IntPtr.Zero ? 0 :
+            GetWindowThreadProcessIdForDiagnostic(info.hwndCaret, out caretProcessId);
+        return new GuiInputContextDiagnostic(info.hwndFocus, focusProcessId, focusThreadId,
+            GetKeyboardLayout(focusThreadId), info.hwndCaret, caretProcessId, caretThreadId,
+            GetKeyboardLayout(caretThreadId), true);
     }
 
     public static bool TryGetMap(KeyboardLayoutInfo layout, out KeyboardLayoutMap map)
