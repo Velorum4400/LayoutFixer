@@ -15,6 +15,7 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly AppSettings _settings;
     private readonly ScannerInputService _scanner;
     private readonly System.Windows.Forms.Timer _hotkeyTimer;
+    private readonly System.Windows.Forms.Timer _hotkeyWatchdog;
     private TextReplacementOperationType? _queuedOperation;
 
     public TrayApplicationContext()
@@ -37,6 +38,9 @@ public sealed class TrayApplicationContext : ApplicationContext
         _lastWordHotkeyService = new HotkeyService { Hotkey = _settings.LastWordHotkey };
         _selectedTextHotkeyService = new HotkeyService { Hotkey = _settings.SelectedTextHotkey };
         _hotkeyTimer = new System.Windows.Forms.Timer { Interval = 60 };
+        _hotkeyWatchdog = new System.Windows.Forms.Timer { Interval = 5000 };
+        _hotkeyWatchdog.Tick += (_, _) => LogHotkeyWatchdog();
+        _hotkeyWatchdog.Start();
         _hotkeyTimer.Tick += (_, _) =>
         {
             _hotkeyTimer.Stop();
@@ -78,6 +82,14 @@ public sealed class TrayApplicationContext : ApplicationContext
         _hotkeyTimer.Start();
     }
 
+    private void LogHotkeyWatchdog()
+    {
+        DiagnosticLogStore.Write($"HOTKEY WATCHDOG: uiThreadId={System.Threading.Thread.CurrentThread.ManagedThreadId}, " +
+            $"fullAlive={_fullHotkeyService.IsAlive}, fullHook=0x{_fullHotkeyService.HookHandle.ToInt64():X}, fullCallbacks={_fullHotkeyService.CallbackCount}, fullLastCallbackUtc={_fullHotkeyService.LastCallbackUtc:O}, " +
+            $"insertAlive={_lastWordHotkeyService.IsAlive}, insertHook=0x{_lastWordHotkeyService.HookHandle.ToInt64():X}, insertCallbacks={_lastWordHotkeyService.CallbackCount}, insertLastCallbackUtc={_lastWordHotkeyService.LastCallbackUtc:O}, " +
+            $"pauseAlive={_selectedTextHotkeyService.IsAlive}, pauseHook=0x{_selectedTextHotkeyService.HookHandle.ToInt64():X}, pauseCallbacks={_selectedTextHotkeyService.CallbackCount}, pauseLastCallbackUtc={_selectedTextHotkeyService.LastCallbackUtc:O}");
+    }
+
     private void ExecuteHotkey(TextReplacementOperationType operation)
     {
         bool enabled = operation switch
@@ -117,6 +129,8 @@ public sealed class TrayApplicationContext : ApplicationContext
     {
         _hotkeyTimer.Stop();
         _hotkeyTimer.Dispose();
+        _hotkeyWatchdog.Stop();
+        _hotkeyWatchdog.Dispose();
         _fullHotkeyService.Dispose();
         _lastWordHotkeyService.Dispose();
         _selectedTextHotkeyService.Dispose();
