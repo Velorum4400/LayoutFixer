@@ -16,6 +16,8 @@ internal sealed class TextReplacementOperation
     public IntPtr TargetWindow { get; init; }
     public KeyboardLayoutInfo SourceLayout { get; set; } = default!;
     public KeyboardLayoutInfo TargetLayout { get; set; } = default!;
+    public KeyboardLayoutMap SourceMap { get; set; } = default!;
+    public KeyboardLayoutMap TargetMap { get; set; } = default!;
     public string SourceText { get; set; } = string.Empty;
     public string ConvertedText { get; set; } = string.Empty;
     public ClipboardSnapshot RestoreSnapshot { get; set; } = new();
@@ -26,5 +28,6 @@ internal sealed class TextReplacementOperation
     public uint OurPasteClipboardSequence { get; set; }
     public uint LastWordSearchClipboardSequence { get; set; }
     public bool LastWordSearchClipboardContainsSourceText { get; set; }
+    public string LastWordSearchFragment { get; set; } = string.Empty;
 }
 
