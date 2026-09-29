@@ -17,6 +17,10 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly System.Windows.Forms.Timer _hotkeyTimer;
     private readonly System.Windows.Forms.Timer _hotkeyWatchdog;
     private TextReplacementOperationType? _queuedOperation;
+    private long _fullCallbackCount;
+    private long _insertCallbackCount;
+    private long _pauseCallbackCount;
+    private bool _hotkeyWatchdogStopped;
 
     public TrayApplicationContext()
     {
@@ -37,6 +41,10 @@ public sealed class TrayApplicationContext : ApplicationContext
         _fullHotkeyService = new HotkeyService { Hotkey = _settings.FullTextHotkey };
         _lastWordHotkeyService = new HotkeyService { Hotkey = _settings.LastWordHotkey };
         _selectedTextHotkeyService = new HotkeyService { Hotkey = _settings.SelectedTextHotkey };
+        _fullCallbackCount = _fullHotkeyService.CallbackCount;
+        _insertCallbackCount = _lastWordHotkeyService.CallbackCount;
+        _pauseCallbackCount = _selectedTextHotkeyService.CallbackCount;
+        HotkeyWatchdogLog.StartSession();
         _hotkeyTimer = new System.Windows.Forms.Timer { Interval = 60 };
         _hotkeyWatchdog = new System.Windows.Forms.Timer { Interval = 5000 };
         _hotkeyWatchdog.Tick += (_, _) => LogHotkeyWatchdog();
@@ -84,10 +92,43 @@ public sealed class TrayApplicationContext : ApplicationContext
 
     private void LogHotkeyWatchdog()
     {
-        DiagnosticLogStore.Write($"HOTKEY WATCHDOG: uiThreadId={System.Threading.Thread.CurrentThread.ManagedThreadId}, " +
-            $"fullAlive={_fullHotkeyService.IsAlive}, fullHook=0x{_fullHotkeyService.HookHandle.ToInt64():X}, fullCallbacks={_fullHotkeyService.CallbackCount}, fullLastCallbackUtc={_fullHotkeyService.LastCallbackUtc:O}, " +
-            $"insertAlive={_lastWordHotkeyService.IsAlive}, insertHook=0x{_lastWordHotkeyService.HookHandle.ToInt64():X}, insertCallbacks={_lastWordHotkeyService.CallbackCount}, insertLastCallbackUtc={_lastWordHotkeyService.LastCallbackUtc:O}, " +
-            $"pauseAlive={_selectedTextHotkeyService.IsAlive}, pauseHook=0x{_selectedTextHotkeyService.HookHandle.ToInt64():X}, pauseCallbacks={_selectedTextHotkeyService.CallbackCount}, pauseLastCallbackUtc={_selectedTextHotkeyService.LastCallbackUtc:O}");
+        if (_hotkeyWatchdogStopped)
+            return;
+
+        long fullCallbacks = _fullHotkeyService.CallbackCount;
+        long insertCallbacks = _lastWordHotkeyService.CallbackCount;
+        long pauseCallbacks = _selectedTextHotkeyService.CallbackCount;
+        string status = $"HOTKEY WATCHDOG: uiThreadId={System.Threading.Thread.CurrentThread.ManagedThreadId}, " +
+            $"fullAlive={_fullHotkeyService.IsAlive}, fullHook=0x{_fullHotkeyService.HookHandle.ToInt64():X}, fullCallbacks={fullCallbacks}, fullLastCallbackUtc={_fullHotkeyService.LastCallbackUtc:O}, " +
+            $"insertAlive={_lastWordHotkeyService.IsAlive}, insertHook=0x{_lastWordHotkeyService.HookHandle.ToInt64():X}, insertCallbacks={insertCallbacks}, insertLastCallbackUtc={_lastWordHotkeyService.LastCallbackUtc:O}, " +
+            $"pauseAlive={_selectedTextHotkeyService.IsAlive}, pauseHook=0x{_selectedTextHotkeyService.HookHandle.ToInt64():X}, pauseCallbacks={pauseCallbacks}, pauseLastCallbackUtc={_selectedTextHotkeyService.LastCallbackUtc:O}";
+
+        if (!_fullHotkeyService.IsAlive || !_lastWordHotkeyService.IsAlive || !_selectedTextHotkeyService.IsAlive)
+        {
+            StopHotkeyWatchdog("one or more hook handles are no longer alive; " + status);
+            return;
+        }
+
+        bool keyboardActivityObserved = fullCallbacks != _fullCallbackCount ||
+            insertCallbacks != _insertCallbackCount || pauseCallbacks != _pauseCallbackCount;
+        if (keyboardActivityObserved &&
+            (fullCallbacks != insertCallbacks || fullCallbacks != pauseCallbacks))
+        {
+            StopHotkeyWatchdog("hook callback counters diverged after keyboard activity; " + status);
+            return;
+        }
+
+        _fullCallbackCount = fullCallbacks;
+        _insertCallbackCount = insertCallbacks;
+        _pauseCallbackCount = pauseCallbacks;
+        HotkeyWatchdogLog.WriteHealthy(status);
+    }
+
+    private void StopHotkeyWatchdog(string reason)
+    {
+        _hotkeyWatchdogStopped = true;
+        _hotkeyWatchdog.Stop();
+        HotkeyWatchdogLog.Stop(reason);
     }
 
     private void ExecuteHotkey(TextReplacementOperationType operation)
