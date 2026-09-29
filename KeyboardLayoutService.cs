@@ -9,6 +9,9 @@ namespace LayoutFixer;
 public sealed record KeyboardLayoutInfo(IntPtr Handle, ushort LanguageId, string DisplayName, string ShortName);
 public sealed record KeyboardLayoutDiagnostic(uint TargetThreadId, uint LayoutFixerThreadId,
     IntPtr TargetThreadLayout, IntPtr LayoutFixerThreadLayout);
+public sealed record LayoutResolutionDiagnostic(IntPtr TargetWindow, uint TargetProcessId,
+    uint TargetThreadId, uint CurrentProcessId, uint CurrentThreadId, IntPtr TargetThreadLayout,
+    IntPtr CurrentThreadLayout, string CachedLayouts);
 
 public static class KeyboardLayoutService
 {
@@ -136,6 +139,22 @@ public static class KeyboardLayoutService
             GetKeyboardLayout(targetThreadId), GetKeyboardLayout(layoutFixerThreadId));
     }
 
+    public static LayoutResolutionDiagnostic GetResolutionDiagnostic(IntPtr targetWindow)
+    {
+        uint targetProcessId = 0;
+        uint targetThreadId = targetWindow == IntPtr.Zero ? 0 :
+            GetWindowThreadProcessIdForDiagnostic(targetWindow, out targetProcessId);
+        if (targetWindow == IntPtr.Zero) targetProcessId = 0;
+        uint currentThreadId = GetCurrentThreadId();
+        KeyboardLayoutInfo[] snapshot;
+        lock (Sync) snapshot = _layouts.ToArray();
+        string cached = string.Join(",", snapshot.Select(layout =>
+            $"{layout.ShortName}:0x{layout.Handle.ToInt64():X}"));
+        return new LayoutResolutionDiagnostic(targetWindow, targetProcessId, targetThreadId,
+            (uint)System.Diagnostics.Process.GetCurrentProcess().Id, currentThreadId,
+            GetKeyboardLayout(targetThreadId), GetKeyboardLayout(currentThreadId), cached);
+    }
+
     public static bool TryGetMap(KeyboardLayoutInfo layout, out KeyboardLayoutMap map)
     {
         lock (Sync)
@@ -203,6 +222,8 @@ public static class KeyboardLayoutService
 
     [DllImport("user32.dll")] private static extern int GetKeyboardLayoutList(int nBuff, [Out] IntPtr[]? lpList);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, IntPtr processId);
+    [DllImport("user32.dll", EntryPoint = "GetWindowThreadProcessId")]
+    private static extern uint GetWindowThreadProcessIdForDiagnostic(IntPtr hWnd, out uint processId);
     [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
     [DllImport("user32.dll")] private static extern IntPtr GetKeyboardLayout(uint idThread);
     [DllImport("user32.dll", SetLastError = true)]
