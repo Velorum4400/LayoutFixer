@@ -189,8 +189,8 @@ var staThread = new Thread(() =>
 
         using var viewer = new LogViewerForm();
         viewer.CreateControl();
-        Check(viewer.Controls.OfType<System.Windows.Forms.TabControl>().Single().TabPages.Count == 2,
-            "log viewer includes a scanner log tab");
+        Check(viewer.Controls.OfType<System.Windows.Forms.TabControl>().Single().TabPages.Count == 3,
+            "log viewer includes scanner and hotkey watchdog tabs");
 
         using var scanner = new ScannerInputService(new AppSettings());
         using var settings = new SettingsShellForm(new AppSettings(), scanner);
