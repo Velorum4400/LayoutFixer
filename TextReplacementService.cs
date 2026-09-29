@@ -33,6 +33,8 @@ internal static class TextReplacementService
         bool clipboardContainsOurData = false;
         bool pasted = false;
         Log($"========== START operation={operation.Id:N}, OperationType={operation.Type}, target=0x{targetWindow.ToInt64():X}");
+        if (operation.Type == TextReplacementOperationType.LastWord)
+            Log("LastWord PERF start t=0 ms");
 
         try
         {
@@ -66,7 +68,7 @@ internal static class TextReplacementService
             operation.RestoreSnapshotSequence = initialSnapshotSequence;
             Log($"Clipboard snapshot captured: formats={initialSnapshot.FormatCount}, sequence={initialSnapshotSequence}, elapsed={snapshotElapsed} ms");
 
-            if (!PrepareSelection(operation))
+            if (!PrepareSelection(operation, total))
             {
                 Log($"FAIL: selection preparation failed for OperationType={operation.Type}");
                 return false;
@@ -91,6 +93,7 @@ internal static class TextReplacementService
                 Log($"FAIL: Clipboard copy did not stabilize within {copyResult.ElapsedMilliseconds} ms");
                 return false;
             }
+            LogLastWordCopyPerf("final-copy", copyResult, total);
             operation.SourceText = copyResult.Text;
             operation.CopyTextHash = copyResult.TextHash;
             operation.CopyTextLength = copyResult.Text.Length;
@@ -137,8 +140,11 @@ internal static class TextReplacementService
                 Log($"Clipboard early restore not required: current sequence={operation.RestoreSnapshotSequence} already represents the latest external snapshot");
             }
 
+            var convertTimer = Stopwatch.StartNew();
             operation.ConvertedText = LayoutConverter.Convert(operation.SourceText, sourceMap,
                 targetMap, out int unchangedCount);
+            if (operation.Type == TextReplacementOperationType.LastWord)
+                Log($"LastWord PERF convert sourceLength={operation.SourceText.Length}, convertedLength={operation.ConvertedText.Length}, duration={convertTimer.ElapsedMilliseconds} ms, t={total.ElapsedMilliseconds} ms");
             Log($"Conversion result: success=True, sourceLength={operation.SourceText.Length}, convertedLength={operation.ConvertedText.Length}, unchanged={unchangedCount}");
 
             if (GetForegroundWindow() != targetWindow)
@@ -148,38 +154,52 @@ internal static class TextReplacementService
                 return false;
 
             clipboardTimer.Restart();
+            var writeTimer = Stopwatch.StartNew();
             if (!ClipboardService.TrySetText(operation.ConvertedText,
                     out uint pasteSequence))
             {
                 Log($"FAIL: converted text Clipboard write timeout after {clipboardTimer.ElapsedMilliseconds} ms");
                 return false;
             }
+            if (operation.Type == TextReplacementOperationType.LastWord)
+                Log($"LastWord PERF paste clipboardWrite={writeTimer.ElapsedMilliseconds} ms, t={total.ElapsedMilliseconds} ms");
             operation.OurPasteClipboardSequence = pasteSequence;
             clipboardContainsOurData = true;
             Log($"Converted text written to Clipboard: elapsed={clipboardTimer.ElapsedMilliseconds} ms, sequence={operation.OurPasteClipboardSequence}");
 
             if (GetForegroundWindow() != targetWindow)
                 return Fail("active window changed immediately before Ctrl+V", targetWindow);
+            var pasteTimer = Stopwatch.StartNew();
             if (!KeyboardInputService.Paste())
             {
                 Log("FAIL: Ctrl+V SendInput failed");
                 return false;
             }
             pasted = true;
+            if (operation.Type == TextReplacementOperationType.LastWord)
+                Log($"LastWord PERF paste CtrlV={pasteTimer.ElapsedMilliseconds} ms, t={total.ElapsedMilliseconds} ms");
             Log("Ctrl+V sent: success=True");
 
             Thread.Sleep(Math.Max(0, PasteRestoreDelayMilliseconds));
+            var restoreTimer = Stopwatch.StartNew();
             ClipboardRestoreResult restoreResult = ClipboardService.RestoreIfUnchanged(
                 operation.RestoreSnapshot, operation.OurPasteClipboardSequence, out _);
             LogRestoreResult(restoreResult, "after Paste");
             clipboardContainsOurData = false;
+            if (operation.Type == TextReplacementOperationType.LastWord)
+                Log($"LastWord PERF paste postPasteWait={PasteRestoreDelayMilliseconds} ms, clipboardRestore={restoreTimer.ElapsedMilliseconds} ms, t={total.ElapsedMilliseconds} ms");
 
+            var switchTimer = Stopwatch.StartNew();
             bool layoutSwitched = KeyboardLayoutService.SwitchLayout(targetWindow, targetLayout);
+            if (operation.Type == TextReplacementOperationType.LastWord)
+                Log($"LastWord PERF layout-switch duration={switchTimer.ElapsedMilliseconds} ms, t={total.ElapsedMilliseconds} ms");
             Log($"Layout switch: success={layoutSwitched}, target={targetLayout.DisplayName}");
             if (!layoutSwitched)
                 return false;
 
             Log("SUCCESS");
+            if (operation.Type == TextReplacementOperationType.LastWord)
+                Log($"LastWord PERF SUMMARY result=SUCCESS TOTAL={total.ElapsedMilliseconds} ms");
             return true;
         }
         catch (Exception ex)
@@ -202,7 +222,7 @@ internal static class TextReplacementService
         }
     }
 
-    private static bool PrepareSelection(TextReplacementOperation operation)
+    private static bool PrepareSelection(TextReplacementOperation operation, Stopwatch total)
     {
         switch (operation.Type)
         {
@@ -211,7 +231,7 @@ internal static class TextReplacementService
                 Log("Ctrl+A sent");
                 return true;
             case TextReplacementOperationType.LastWord:
-                return TrySelectLastNonWhitespaceFragment(operation);
+                return TrySelectLastNonWhitespaceFragment(operation, total);
             case TextReplacementOperationType.SelectedText:
                 Log("Existing selection retained");
                 return true;
@@ -220,9 +240,9 @@ internal static class TextReplacementService
         }
     }
 
-    private static bool TrySelectLastNonWhitespaceFragment(TextReplacementOperation operation)
+    private static bool TrySelectLastNonWhitespaceFragment(TextReplacementOperation operation, Stopwatch total)
     {
-        if (!TryProbeLastWordDirection(operation, out LastWordSearchDirection direction,
+        if (!TryProbeLastWordDirection(operation, total, out LastWordSearchDirection direction,
                 out string selection))
         {
             Log("FAIL: no LastWord text found in either direction");
@@ -242,19 +262,23 @@ internal static class TextReplacementService
                 Log($"LastWord search iteration={iteration}: Ctrl+Shift+{direction} sent");
                 Thread.Sleep(15);
 
-                if (!TryCopySearchSelection(operation, out selection))
+                if (!TryCopySearchSelection(operation, total, $"search iteration={iteration}", out selection))
                     return false;
             }
 
+            var analysisTimer = Stopwatch.StartNew();
             LastWordSelectionAnalysis analysis = LastWordSelectionAnalyzer.Analyze(selection);
+            Log($"LastWord PERF analyze-selection iteration={iteration}, duration={analysisTimer.ElapsedMilliseconds} ms, selectionLength={selection.Length}, t={total.ElapsedMilliseconds} ms");
             Log($"LastWord search iteration={iteration}, selectionLength={selection.Length}, boundaryWhitespaceFound={analysis.BoundaryWhitespaceFound}, trailingWhitespace={analysis.TrailingWhitespaceLength}");
 
             bool reachedStartOfField = analysis.HasFragment &&
                 previousSelection != null && string.Equals(previousSelection, selection, StringComparison.Ordinal);
             if (analysis.BoundaryWhitespaceFound || reachedStartOfField)
             {
+                var exactTimer = Stopwatch.StartNew();
                 if (!SelectExactLastWordFragment(selection, analysis, direction))
                     return false;
+                Log($"LastWord PERF exact-selection direction={direction}, fragmentLength={analysis.FragmentLength}, duration={exactTimer.ElapsedMilliseconds} ms, t={total.ElapsedMilliseconds} ms");
                 string boundary = analysis.BoundaryWhitespaceFound ? "Whitespace" : "StartOfField";
                 Log($"LastWord search completed: iterations={iteration}, fragmentLength={analysis.FragmentLength}, trailingWhitespace={analysis.TrailingWhitespaceLength}, boundary={boundary}");
                 return true;
@@ -267,7 +291,7 @@ internal static class TextReplacementService
         return false;
     }
 
-    private static bool TryProbeLastWordDirection(TextReplacementOperation operation,
+    private static bool TryProbeLastWordDirection(TextReplacementOperation operation, Stopwatch total,
         out LastWordSearchDirection selectedDirection, out string selection)
     {
         selection = string.Empty;
@@ -275,6 +299,7 @@ internal static class TextReplacementService
                  { LastWordSearchDirection.Left, LastWordSearchDirection.Right })
         {
             Log($"LastWord direction probe: direction={direction}");
+            var probeTimer = Stopwatch.StartNew();
             if (!KeyboardInputService.SelectPreviousWord(direction))
             {
                 Log($"LastWord direction probe: {direction} SendInput failed");
@@ -314,10 +339,11 @@ internal static class TextReplacementService
                 }
 
                 RecordLastWordSearchCopy(operation, copyResult);
+                LogLastWordCopyPerf($"direction-probe direction={direction}", copyResult, total);
                 selection = copyResult.Text;
                 Log($"LastWord probe result: TextCopied, selectionLength={selection.Length}");
                 selectedDirection = direction;
-                return true;
+                Log($"LastWord PERF direction-probe END direction={direction}, result=TextCopied, duration={probeTimer.ElapsedMilliseconds} ms, t={total.ElapsedMilliseconds} ms"); return true;
             }
 
             if (ClipboardService.IsCurrentSequence(markerSequence))
@@ -335,7 +361,7 @@ internal static class TextReplacementService
         return false;
     }
 
-    private static bool TryCopySearchSelection(TextReplacementOperation operation, out string selection)
+    private static bool TryCopySearchSelection(TextReplacementOperation operation, Stopwatch total, string stage, out string selection)
     {
         selection = string.Empty;
         uint sequenceBeforeCopy = ClipboardService.SequenceNumber;
@@ -355,6 +381,7 @@ internal static class TextReplacementService
 
         selection = copyResult.Text;
         RecordLastWordSearchCopy(operation, copyResult);
+        LogLastWordCopyPerf(stage, copyResult, total);
 
         return true;
     }
@@ -453,6 +480,9 @@ internal static class TextReplacementService
     }
 
     private static void Log(string message) => DiagnosticLogStore.Write(message);
+
+    private static void LogLastWordCopyPerf(string stage, ClipboardCopyResult result, Stopwatch total) =>
+        Log($"LastWord PERF Clipboard {stage}: firstChangeDelay={result.FirstChangeDelayMilliseconds} ms, stabilizationDelay={result.StabilizationDelayMilliseconds} ms, totalCopyWait={result.ElapsedMilliseconds} ms, readText={result.ReadTextMilliseconds} ms, sequenceChanges={result.ChangeCount}, selectionLength={result.Text.Length}, t={total.ElapsedMilliseconds} ms");
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
