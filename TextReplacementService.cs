@@ -44,12 +44,15 @@ internal static class TextReplacementService
             if (operation.Type == TextReplacementOperationType.LastWord)
             {
                 LayoutResolutionDiagnostic diagnostic = KeyboardLayoutService.GetResolutionDiagnostic(targetWindow);
+                GuiInputContextDiagnostic gui = KeyboardLayoutService.GetGuiInputContextDiagnostic(diagnostic.TargetThreadId);
                 Log("LAYOUT DIAGNOSTIC BEGIN");
                 Log($"ForegroundWindow=0x{GetForegroundWindow().ToInt64():X}, TargetWindow=0x{diagnostic.TargetWindow.ToInt64():X}");
                 Log($"ForegroundWindowProcessId={diagnostic.TargetProcessId}, ForegroundWindowThreadId={diagnostic.TargetThreadId}");
                 Log($"CurrentProcessId={diagnostic.CurrentProcessId}, CurrentThreadId={diagnostic.CurrentThreadId}");
                 Log($"GetKeyboardLayout(foregroundThreadId)=0x{diagnostic.TargetThreadLayout.ToInt64():X}");
                 Log($"GetKeyboardLayout(currentThreadId)=0x{diagnostic.CurrentThreadLayout.ToInt64():X}");
+                Log($"GetGUIThreadInfo success={gui.QuerySucceeded}, FocusWindow=0x{gui.FocusWindow.ToInt64():X}, FocusProcessId={gui.FocusProcessId}, FocusThreadId={gui.FocusThreadId}, GetKeyboardLayout(focusThreadId)=0x{gui.FocusThreadLayout.ToInt64():X}");
+                Log($"CaretWindow=0x{gui.CaretWindow.ToInt64():X}, CaretProcessId={gui.CaretProcessId}, CaretThreadId={gui.CaretThreadId}, GetKeyboardLayout(caretThreadId)=0x{gui.CaretThreadLayout.ToInt64():X}");
                 Log($"CachedLayouts=[{diagnostic.CachedLayouts}]");
             }
 
