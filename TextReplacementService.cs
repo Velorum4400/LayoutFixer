@@ -7,7 +7,7 @@ namespace LayoutFixer;
 
 internal static class TextReplacementService
 {
-    public static int PasteRestoreDelayMilliseconds { get; set; } = 100;
+    public static int PasteRestoreDelayMilliseconds { get; set; } = 20;
     private const int MaxLastWordSearchIterations = 10;
     private static int _running;
 
