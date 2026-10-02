@@ -25,6 +25,10 @@ public sealed class HotkeyService : IDisposable
     private bool _modifierOnly = true;
     private long _callbackCount;
     private long _lastCallbackUtcTicks;
+    private int _lastVirtualKey = -1;
+    private int _lastMessage = -1;
+    private int _lastFlags;
+    private int _lastInjected;
     private readonly uint _installThreadId;
     private int _disposed;
 
@@ -33,6 +37,10 @@ public sealed class HotkeyService : IDisposable
     public bool IsAlive => Volatile.Read(ref _disposed) == 0 && _hook != IntPtr.Zero;
     public long CallbackCount => Interlocked.Read(ref _callbackCount);
     public DateTime LastCallbackUtc => new(Interlocked.Read(ref _lastCallbackUtcTicks), DateTimeKind.Utc);
+    public int LastVirtualKey => Volatile.Read(ref _lastVirtualKey);
+    public int LastMessage => Volatile.Read(ref _lastMessage);
+    public uint LastFlags => unchecked((uint)Volatile.Read(ref _lastFlags));
+    public bool LastInjected => Volatile.Read(ref _lastInjected) != 0;
     public uint InstallThreadId => _installThreadId;
     public string Hotkey
     {
@@ -68,6 +76,11 @@ public sealed class HotkeyService : IDisposable
         {
             if (nCode < 0) return CallNextHookEx(_hook, nCode, wParam, lParam);
             var data = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
+            Volatile.Write(ref _lastVirtualKey, unchecked((int)data.vkCode));
+            Volatile.Write(ref _lastMessage, wParam.ToInt32());
+            Volatile.Write(ref _lastFlags, unchecked((int)data.flags));
+            Volatile.Write(ref _lastInjected,
+                (data.flags & LLKHF_INJECTED) != 0 ? 1 : 0);
             if ((data.flags & LLKHF_INJECTED) != 0) return CallNextHookEx(_hook, nCode, wParam, lParam);
             int message = wParam.ToInt32(); bool down = message == WM_KEYDOWN || message == WM_SYSKEYDOWN; bool up = message == WM_KEYUP || message == WM_SYSKEYUP;
             if (!down && !up) return CallNextHookEx(_hook, nCode, wParam, lParam);
