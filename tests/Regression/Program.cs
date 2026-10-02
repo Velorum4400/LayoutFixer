@@ -105,6 +105,11 @@ CheckLastWord("שלום עולם!", 5, 5, 0, true, "RTL punctuation remains part
 CheckLastWord("שלום עולם   ", 5, 4, 3, true, "RTL trailing whitespace is excluded");
 Check(typeof(HotkeyService).GetEvents().Any(x => x.Name == "Pressed"),
     "hotkey service exposes only the trigger event");
+Check(typeof(HotkeyService).GetProperty("LastVirtualKey") != null &&
+      typeof(HotkeyService).GetProperty("LastMessage") != null &&
+      typeof(HotkeyService).GetProperty("LastFlags") != null &&
+      typeof(HotkeyService).GetProperty("LastInjected") != null,
+    "hotkey service exposes callback diagnostics");
 Check(typeof(TextReplacementService).Assembly.GetType("LayoutFixer.TextFixer") == null,
     "legacy combined text fixer removed");
 Check(typeof(LayoutConverter).GetMethods(BindingFlags.Public | BindingFlags.Static)
