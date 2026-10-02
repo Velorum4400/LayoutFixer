@@ -222,14 +222,24 @@ internal static class TextReplacementService
                 Log($"LastWord PERF paste CtrlV={pasteTimer.ElapsedMilliseconds} ms, t={total.ElapsedMilliseconds} ms");
             Log("Ctrl+V sent: success=True");
 
+            if (operation.Type == TextReplacementOperationType.LastWord)
+                Log($"LastWord PERF paste wait BEGIN requested={PasteRestoreDelayMilliseconds} ms, t={total.ElapsedMilliseconds} ms");
+            var postPasteWaitTimer = Stopwatch.StartNew();
             Thread.Sleep(Math.Max(0, PasteRestoreDelayMilliseconds));
+            if (operation.Type == TextReplacementOperationType.LastWord)
+                Log($"LastWord PERF paste wait END requested={PasteRestoreDelayMilliseconds} ms, actual={postPasteWaitTimer.ElapsedMilliseconds} ms, t={total.ElapsedMilliseconds} ms");
+
             var restoreTimer = Stopwatch.StartNew();
+            uint currentSequenceBeforeRestore = ClipboardService.SequenceNumber;
+            if (operation.Type == TextReplacementOperationType.LastWord)
+                Log($"LastWord PERF restore BEGIN expectedSequence={operation.OurPasteClipboardSequence}, currentSequence={currentSequenceBeforeRestore}, t={total.ElapsedMilliseconds} ms");
             ClipboardRestoreResult restoreResult = ClipboardService.RestoreIfUnchanged(
-                operation.RestoreSnapshot, operation.OurPasteClipboardSequence, out _);
+                operation.RestoreSnapshot, operation.OurPasteClipboardSequence,
+                out uint resultingSequence);
             LogRestoreResult(restoreResult, "after Paste");
             clipboardContainsOurData = false;
             if (operation.Type == TextReplacementOperationType.LastWord)
-                Log($"LastWord PERF paste postPasteWait={PasteRestoreDelayMilliseconds} ms, clipboardRestore={restoreTimer.ElapsedMilliseconds} ms, t={total.ElapsedMilliseconds} ms");
+                Log($"LastWord PERF restore END result={restoreResult}, duration={restoreTimer.ElapsedMilliseconds} ms, resultingSequence={resultingSequence}, t={total.ElapsedMilliseconds} ms");
 
             var switchTimer = Stopwatch.StartNew();
             bool layoutSwitched = KeyboardLayoutService.SwitchLayout(targetWindow, targetLayout);
