@@ -17,10 +17,6 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly System.Windows.Forms.Timer _hotkeyTimer;
     private readonly System.Windows.Forms.Timer _hotkeyWatchdog;
     private TextReplacementOperationType? _queuedOperation;
-    private long _fullCallbackCount;
-    private long _insertCallbackCount;
-    private long _pauseCallbackCount;
-    private bool _hotkeyWatchdogStopped;
 
     public TrayApplicationContext()
     {
@@ -41,9 +37,6 @@ public sealed class TrayApplicationContext : ApplicationContext
         _fullHotkeyService = new HotkeyService { Hotkey = _settings.FullTextHotkey };
         _lastWordHotkeyService = new HotkeyService { Hotkey = _settings.LastWordHotkey };
         _selectedTextHotkeyService = new HotkeyService { Hotkey = _settings.SelectedTextHotkey };
-        _fullCallbackCount = _fullHotkeyService.CallbackCount;
-        _insertCallbackCount = _lastWordHotkeyService.CallbackCount;
-        _pauseCallbackCount = _selectedTextHotkeyService.CallbackCount;
         HotkeyWatchdogLog.StartSession();
         _hotkeyTimer = new System.Windows.Forms.Timer { Interval = 60 };
         _hotkeyWatchdog = new System.Windows.Forms.Timer { Interval = 5000 };
@@ -92,44 +85,65 @@ public sealed class TrayApplicationContext : ApplicationContext
 
     private void LogHotkeyWatchdog()
     {
-        if (_hotkeyWatchdogStopped)
-            return;
-
         long fullCallbacks = _fullHotkeyService.CallbackCount;
         long insertCallbacks = _lastWordHotkeyService.CallbackCount;
         long pauseCallbacks = _selectedTextHotkeyService.CallbackCount;
-        string status = $"HOTKEY WATCHDOG: uiThreadId={System.Threading.Thread.CurrentThread.ManagedThreadId}, " +
-            $"fullAlive={_fullHotkeyService.IsAlive}, fullHook=0x{_fullHotkeyService.HookHandle.ToInt64():X}, fullCallbacks={fullCallbacks}, fullLastCallbackUtc={_fullHotkeyService.LastCallbackUtc:O}, " +
-            $"insertAlive={_lastWordHotkeyService.IsAlive}, insertHook=0x{_lastWordHotkeyService.HookHandle.ToInt64():X}, insertCallbacks={insertCallbacks}, insertLastCallbackUtc={_lastWordHotkeyService.LastCallbackUtc:O}, " +
-            $"pauseAlive={_selectedTextHotkeyService.IsAlive}, pauseHook=0x{_selectedTextHotkeyService.HookHandle.ToInt64():X}, pauseCallbacks={pauseCallbacks}, pauseLastCallbackUtc={_selectedTextHotkeyService.LastCallbackUtc:O}";
-
-        if (!_fullHotkeyService.IsAlive || !_lastWordHotkeyService.IsAlive || !_selectedTextHotkeyService.IsAlive)
-        {
-            StopHotkeyWatchdog("one or more hook handles are no longer alive; " + status);
-            return;
-        }
-
-        bool keyboardActivityObserved = fullCallbacks != _fullCallbackCount ||
-            insertCallbacks != _insertCallbackCount || pauseCallbacks != _pauseCallbackCount;
-        if (keyboardActivityObserved &&
-            (fullCallbacks != insertCallbacks || fullCallbacks != pauseCallbacks))
-        {
-            StopHotkeyWatchdog("hook callback counters diverged after keyboard activity; " + status);
-            return;
-        }
-
-        _fullCallbackCount = fullCallbacks;
-        _insertCallbackCount = insertCallbacks;
-        _pauseCallbackCount = pauseCallbacks;
+        long combinedCallbacks = fullCallbacks + insertCallbacks + pauseCallbacks;
+        DateTime latestCallback = LatestCallbackUtc(_fullHotkeyService, _lastWordHotkeyService,
+            _selectedTextHotkeyService);
+        string status = "HOTKEY WATCHDOG:" + Environment.NewLine +
+            $"uiThreadId={System.Threading.Thread.CurrentThread.ManagedThreadId}, " +
+            $"keyboardActivityCallbacks={combinedCallbacks}, " +
+            $"keyboardActivityLastUtc={FormatUtc(latestCallback, combinedCallbacks)}, " +
+            $"keyboardActivityAgeMs={FormatAge(latestCallback, combinedCallbacks)}" + Environment.NewLine +
+            FormatHookStatus("full", _fullHotkeyService, fullCallbacks) + Environment.NewLine +
+            FormatHookStatus("insert", _lastWordHotkeyService, insertCallbacks) + Environment.NewLine +
+            FormatHookStatus("pause", _selectedTextHotkeyService, pauseCallbacks);
         HotkeyWatchdogLog.WriteHealthy(status);
+
+        if (fullCallbacks != insertCallbacks || fullCallbacks != pauseCallbacks)
+        {
+            HotkeyWatchdogLog.WriteHealthy(
+                $"HOTKEY WATCHDOG NOTICE: callback counters differ: full={fullCallbacks}, insert={insertCallbacks}, pause={pauseCallbacks}");
+        }
     }
 
-    private void StopHotkeyWatchdog(string reason)
+    private static string FormatHookStatus(string name, HotkeyService service, long callbacks) =>
+        $"{name}Alive={service.IsAlive}, {name}Hook=0x{service.HookHandle.ToInt64():X}, " +
+        $"{name}Callbacks={callbacks}, {name}LastCallbackUtc={FormatUtc(service.LastCallbackUtc, callbacks)}, " +
+        $"{name}CallbackAgeMs={FormatAge(service.LastCallbackUtc, callbacks)}, " +
+        $"{name}LastVk={FormatVirtualKey(service.LastVirtualKey)}, " +
+        $"{name}LastMessage={FormatMessage(service.LastMessage)}, " +
+        $"{name}LastFlags=0x{service.LastFlags:X2}, {name}LastInjected={service.LastInjected}";
+
+    private static DateTime LatestCallbackUtc(params HotkeyService[] services)
     {
-        _hotkeyWatchdogStopped = true;
-        _hotkeyWatchdog.Stop();
-        HotkeyWatchdogLog.Stop(reason);
+        DateTime latest = DateTime.MinValue;
+        foreach (HotkeyService service in services)
+        {
+            if (service.CallbackCount > 0 && service.LastCallbackUtc > latest)
+                latest = service.LastCallbackUtc;
+        }
+        return latest;
     }
+
+    private static string FormatUtc(DateTime timestamp, long callbacks) =>
+        callbacks == 0 ? "never" : timestamp.ToString("O");
+
+    private static string FormatAge(DateTime timestamp, long callbacks) =>
+        callbacks == 0 ? "never" : Math.Max(0, (long)(DateTime.UtcNow - timestamp).TotalMilliseconds).ToString();
+
+    private static string FormatVirtualKey(int virtualKey) =>
+        virtualKey < 0 ? "never" : $"0x{virtualKey:X2}";
+
+    private static string FormatMessage(int message) => message switch
+    {
+        0x0100 => "WM_KEYDOWN",
+        0x0101 => "WM_KEYUP",
+        0x0104 => "WM_SYSKEYDOWN",
+        0x0105 => "WM_SYSKEYUP",
+        _ => message < 0 ? "never" : $"0x{message:X}"
+    };
 
     private void ExecuteHotkey(TextReplacementOperationType operation)
     {
