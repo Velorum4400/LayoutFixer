@@ -110,6 +110,15 @@ Check(typeof(HotkeyService).GetProperty("LastVirtualKey") != null &&
       typeof(HotkeyService).GetProperty("LastFlags") != null &&
       typeof(HotkeyService).GetProperty("LastInjected") != null,
     "hotkey service exposes callback diagnostics");
+for (uint index = 0; index < 105; index++)
+{
+    HotkeyDiagnosticBuffer.Record(new HotkeyCallbackDiagnostic(DateTime.UtcNow, "test", index,
+        0x0100, 0, false, 1, 1, IntPtr.Zero, 0, 0));
+}
+IReadOnlyList<HotkeyCallbackDiagnostic> callbackDiagnostics = HotkeyDiagnosticBuffer.Snapshot();
+Check(callbackDiagnostics.Count == 100 && callbackDiagnostics[0].VirtualKey == 5 &&
+      callbackDiagnostics[^1].VirtualKey == 104,
+    "hotkey callback diagnostic buffer is bounded and ordered");
 Check(typeof(TextReplacementService).Assembly.GetType("LayoutFixer.TextFixer") == null,
     "legacy combined text fixer removed");
 Check(typeof(LayoutConverter).GetMethods(BindingFlags.Public | BindingFlags.Static)
