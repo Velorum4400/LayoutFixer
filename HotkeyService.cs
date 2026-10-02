@@ -17,6 +17,7 @@ public sealed class HotkeyService : IDisposable
     private const uint LLKHF_INJECTED = 0x00000010;
     private readonly LowLevelKeyboardProc _callback;
     private readonly IntPtr _hook;
+    private readonly string _diagnosticName;
     private readonly HashSet<Keys> _pressed = new();
     private readonly HashSet<Keys> _suppressed = new();
     private HashSet<Keys>? _pending;
@@ -42,6 +43,7 @@ public sealed class HotkeyService : IDisposable
     public uint LastFlags => unchecked((uint)Volatile.Read(ref _lastFlags));
     public bool LastInjected => Volatile.Read(ref _lastInjected) != 0;
     public uint InstallThreadId => _installThreadId;
+    public string DiagnosticName => _diagnosticName;
     public string Hotkey
     {
         get => _hotkey;
@@ -56,8 +58,9 @@ public sealed class HotkeyService : IDisposable
         }
     }
 
-    public HotkeyService()
+    public HotkeyService(string diagnosticName = "Unknown")
     {
+        _diagnosticName = diagnosticName;
         _callback = HookCallback;
         _installThreadId = GetCurrentThreadId();
         using Process process = Process.GetCurrentProcess();
@@ -66,6 +69,7 @@ public sealed class HotkeyService : IDisposable
         if (_hook == IntPtr.Zero)
             throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
         DiagnosticLogStore.Write($"HotkeyService Register: hotkey={_hotkey}, hook=0x{_hook.ToInt64():X}, installThreadId={_installThreadId}, result=True, error=0");
+        HotkeyWatchdogLog.WriteHealthy($"HOTKEY HOOK INSTALLED: hook={_diagnosticName}, handle=0x{_hook.ToInt64():X}, managedThreadId={Environment.CurrentManagedThreadId}, osThreadId={_installThreadId}");
     }
 
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
@@ -81,6 +85,14 @@ public sealed class HotkeyService : IDisposable
             Volatile.Write(ref _lastFlags, unchecked((int)data.flags));
             Volatile.Write(ref _lastInjected,
                 (data.flags & LLKHF_INJECTED) != 0 ? 1 : 0);
+            IntPtr foregroundWindow = GetForegroundWindow();
+            uint foregroundProcessId = 0;
+            uint foregroundThreadId = foregroundWindow == IntPtr.Zero ? 0 :
+                GetWindowThreadProcessId(foregroundWindow, out foregroundProcessId);
+            HotkeyDiagnosticBuffer.Record(new HotkeyCallbackDiagnostic(
+                DateTime.UtcNow, _diagnosticName, data.vkCode, wParam.ToInt32(), data.flags,
+                (data.flags & LLKHF_INJECTED) != 0, Environment.CurrentManagedThreadId,
+                GetCurrentThreadId(), foregroundWindow, foregroundThreadId, foregroundProcessId));
             if ((data.flags & LLKHF_INJECTED) != 0) return CallNextHookEx(_hook, nCode, wParam, lParam);
             int message = wParam.ToInt32(); bool down = message == WM_KEYDOWN || message == WM_SYSKEYDOWN; bool up = message == WM_KEYUP || message == WM_SYSKEYUP;
             if (!down && !up) return CallNextHookEx(_hook, nCode, wParam, lParam);
@@ -126,5 +138,8 @@ public sealed class HotkeyService : IDisposable
     [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     private static extern IntPtr GetModuleHandle(string? moduleName);
     [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(
+        IntPtr window, out uint processId);
 }
 
