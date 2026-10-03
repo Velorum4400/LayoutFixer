@@ -5,7 +5,7 @@ using System.Text;
 
 namespace LayoutFixer;
 
-// Deliberately narrow experiment: only the documented Win32 Edit control is supported.
+// Deliberately narrow experiment: supported handlers use only native Win32 messages.
 internal static class NativeEditLastWordService
 {
     private const uint EM_GETSEL = 0x00B0;
@@ -36,21 +36,26 @@ internal static class NativeEditLastWordService
         uint focusedPid = 0;
         uint focusedTid = GetWindowThreadProcessId(focusedControl, out focusedPid);
         string className = GetWindowClassName(focusedControl);
-        bool supported = string.Equals(className, "Edit", StringComparison.Ordinal);
+        NativeHandler handler = ResolveHandler(className);
+        bool supported = handler != NativeHandler.Unsupported;
         Log(operation, $"NativeLastWord foregroundWindow=0x{GetForegroundWindow().ToInt64():X}");
         Log(operation, $"NativeLastWord targetPid={targetPid} targetTid={targetTid}");
         Log(operation, $"NativeLastWord focusedControl=0x{focusedControl.ToInt64():X}");
         Log(operation, $"NativeLastWord focusedPid={focusedPid} focusedTid={focusedTid}");
         Log(operation, $"NativeLastWord className=\"{Escape(className)}\"");
         Log(operation, $"NativeLastWord supported={supported}");
+        Log(operation, $"NativeLastWord handler={handler}");
         if (focusedControl == IntPtr.Zero || !IsWindow(focusedControl) || focusedPid != targetPid)
             return End(operation, "Failed", "stage=GetFocusedControl reason=FocusedControlDoesNotMatchTarget", timer);
         if (!supported)
             return End(operation, "Unsupported", $"reason=FocusedControlClassNotSupported className=\"{Escape(className)}\"", timer);
 
         var selectionTimer = Stopwatch.StartNew();
-        if (!TryGetSelection(focusedControl, out int selectionStart, out int selectionEnd))
-            return End(operation, "Failed", "stage=EM_GETSEL reason=MessageFailed", timer);
+        Log(operation, handler == NativeHandler.RichEdit
+            ? "NativeLastWord selectionMethod=EM_GETSEL (cross-process-safe RichEdit path)"
+            : "NativeLastWord selectionMethod=EM_GETSEL");
+        if (!TryGetSelection(focusedControl, handler, out int selectionStart, out int selectionEnd))
+            return End(operation, "Failed", "stage=GetSelection reason=MessageFailed", timer);
         int caret = selectionEnd;
         Log(operation, $"NativeLastWord selection start={selectionStart} end={selectionEnd} caret={caret}");
         if (selectionStart != selectionEnd)
@@ -60,7 +65,7 @@ internal static class NativeEditLastWordService
         }
 
         var textTimer = Stopwatch.StartNew();
-        if (!TryGetText(operation, focusedControl, className, caret, out string text))
+        if (!TryGetText(operation, focusedControl, className, handler, caret, out string text))
             return End(operation, "Failed", "stage=GetText reason=MessageFailed", timer);
         if (caret < 0 || caret > text.Length)
             return End(operation, "Failed", $"stage=GetText reason=CaretOutOfRange caret={caret} textLength={text.Length}", timer);
@@ -85,17 +90,16 @@ internal static class NativeEditLastWordService
             return End(operation, "Failed", "stage=PreReplaceCheck reason=TargetChanged", timer);
 
         var replaceTimer = Stopwatch.StartNew();
-        IntPtr setSelectionResult = SendMessage(focusedControl, EM_SETSEL, (IntPtr)wordStart, (IntPtr)wordEnd);
-        Log(operation, $"NativeLastWord EM_SETSEL result=0x{setSelectionResult.ToInt64():X}");
-        IntPtr replaceResult = SendMessageReplaceSel(focusedControl, EM_REPLACESEL, true, converted);
-        Log(operation, $"NativeLastWord EM_REPLACESEL result=0x{replaceResult.ToInt64():X}");
+        if (!TryReplaceSelection(operation, focusedControl, handler, wordStart, wordEnd, converted))
+            return End(operation, "Failed", "stage=Replace reason=MessageFailed", timer);
 
         var verifyTimer = Stopwatch.StartNew();
-        if (!TryGetText(operation, focusedControl, className, caret, out string afterText))
+        if (!TryGetText(operation, focusedControl, className, handler, caret, out string afterText))
             return End(operation, "Failed", "stage=Verification reason=GetTextFailed", timer);
         bool replacementVerified = afterText.Length >= wordStart + converted.Length &&
             string.CompareOrdinal(afterText, wordStart, converted, 0, converted.Length) == 0;
-        Log(operation, $"NativeLastWord verification success={replacementVerified}");
+        string actual = replacementVerified ? afterText.Substring(wordStart, converted.Length) : string.Empty;
+        Log(operation, $"NativeLastWord verification expected=\"{EscapeForLog(converted)}\" actual=\"{EscapeForLog(actual)}\" success={replacementVerified}");
         if (!replacementVerified)
             return End(operation, "Failed", "stage=Verification reason=ReplacementNotObserved", timer);
 
@@ -118,13 +122,29 @@ internal static class NativeEditLastWordService
         return focus != IntPtr.Zero;
     }
 
-    private static bool TryGetSelection(IntPtr edit, out int start, out int end)
+    private static NativeHandler ResolveHandler(string className) => className switch
+    {
+        "Edit" => NativeHandler.Edit,
+        // Keep this explicit allow-list. Other class names need their own manual validation.
+        "RichEditD2DPT" => NativeHandler.RichEdit,
+        _ => NativeHandler.Unsupported
+    };
+
+    private static bool TryGetSelection(IntPtr edit, NativeHandler handler, out int start, out int end)
     {
         IntPtr startMemory = Marshal.AllocHGlobal(sizeof(int));
         IntPtr endMemory = Marshal.AllocHGlobal(sizeof(int));
         try
         {
-            SendMessage(edit, EM_GETSEL, startMemory, endMemory);
+            // EM_EXGETSEL uses a caller-owned CHARRANGE pointer. RichEdit messages above
+            // WM_USER do not marshal arbitrary pointers across processes, so use the
+            // standard, cross-process-safe EM_GETSEL for this external-control experiment.
+            if (!SendMessageTimeout(edit, EM_GETSEL, startMemory, endMemory, SMTO_ABORTIFHUNG,
+                    MessageTimeoutMilliseconds, out _))
+            {
+                start = end = 0;
+                return false;
+            }
             start = Marshal.ReadInt32(startMemory);
             end = Marshal.ReadInt32(endMemory);
             return start >= 0 && end >= 0;
@@ -137,9 +157,10 @@ internal static class NativeEditLastWordService
     }
 
     private static bool TryGetText(TextReplacementOperation operation, IntPtr edit, string className,
-        int caret, out string text)
+        NativeHandler handler, int caret, out string text)
     {
         text = string.Empty;
+        Log(operation, $"NativeLastWord textMethod=WM_GETTEXTLENGTH+WM_GETTEXT handler={handler}");
         if (!SendMessageTimeout(edit, WM_GETTEXTLENGTH, UIntPtr.Zero, IntPtr.Zero,
                 SMTO_ABORTIFHUNG, MessageTimeoutMilliseconds, out UIntPtr lengthResult))
         {
@@ -176,6 +197,28 @@ internal static class NativeEditLastWordService
         return true;
     }
 
+    private static bool TryReplaceSelection(TextReplacementOperation operation, IntPtr edit,
+        NativeHandler handler, int start, int end, string replacement)
+    {
+        string method = "EM_SETSEL+EM_REPLACESEL";
+        Log(operation, $"NativeLastWord replacementMethod={method} handler={handler}");
+        if (!SendMessageTimeout(edit, EM_SETSEL, (UIntPtr)(uint)start, (IntPtr)end,
+                SMTO_ABORTIFHUNG, MessageTimeoutMilliseconds, out UIntPtr setResult))
+        {
+            Log(operation, $"NativeLastWord EM_SETSEL failed hwnd=0x{edit.ToInt64():X} timeoutMs={MessageTimeoutMilliseconds}");
+            return false;
+        }
+        Log(operation, $"NativeLastWord EM_SETSEL result=0x{setResult.ToUInt64():X}");
+        if (!SendMessageTimeout(edit, EM_REPLACESEL, (UIntPtr)1, replacement,
+                SMTO_ABORTIFHUNG, MessageTimeoutMilliseconds, out UIntPtr replaceResult))
+        {
+            Log(operation, $"NativeLastWord EM_REPLACESEL failed hwnd=0x{edit.ToInt64():X} timeoutMs={MessageTimeoutMilliseconds}");
+            return false;
+        }
+        Log(operation, $"NativeLastWord EM_REPLACESEL result=0x{replaceResult.ToUInt64():X}");
+        return true;
+    }
+
     private static string GetWindowClassName(IntPtr window)
     {
         var buffer = new StringBuilder(256);
@@ -202,6 +245,8 @@ internal static class NativeEditLastWordService
     private static void Log(TextReplacementOperation operation, string message) =>
         DiagnosticLogStore.Write($"operation={operation.Id:N} {message}");
 
+    private enum NativeHandler { Unsupported, Edit, RichEdit }
+
     [StructLayout(LayoutKind.Sequential)]
     private struct GUITHREADINFO
     {
@@ -216,15 +261,21 @@ internal static class NativeEditLastWordService
     [DllImport("user32.dll", SetLastError = true)] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
     [DllImport("user32.dll", SetLastError = true)] private static extern bool GetGUIThreadInfo(uint threadId, ref GUITHREADINFO info);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern int GetClassName(IntPtr window, StringBuilder className, int maxCount);
-    [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true, EntryPoint = "SendMessageTimeoutW")]
     [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SendMessageTimeout(IntPtr window,
         uint message, UIntPtr wParam, IntPtr lParam, uint flags, uint timeoutMilliseconds,
         out UIntPtr result);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true, EntryPoint = "SendMessageTimeoutW")]
     [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SendMessageTimeout(IntPtr window,
+        uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeoutMilliseconds,
+        out UIntPtr result);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true, EntryPoint = "SendMessageTimeoutW")]
+    [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SendMessageTimeout(IntPtr window,
         uint message, UIntPtr wParam, [Out] StringBuilder lParam, uint flags, uint timeoutMilliseconds,
         out UIntPtr result);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "SendMessageW")] private static extern IntPtr SendMessageReplaceSel(IntPtr window, uint message, [MarshalAs(UnmanagedType.Bool)] bool canUndo, [MarshalAs(UnmanagedType.LPWStr)] string replacement);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true, EntryPoint = "SendMessageTimeoutW")]
+    [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SendMessageTimeout(IntPtr window,
+        uint message, UIntPtr wParam, [MarshalAs(UnmanagedType.LPWStr)] string lParam, uint flags,
+        uint timeoutMilliseconds, out UIntPtr result);
 }
 
