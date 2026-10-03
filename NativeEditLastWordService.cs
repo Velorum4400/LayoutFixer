@@ -50,7 +50,7 @@ internal static class NativeEditLastWordService
         if (handler == NativeHandler.ChromiumProbe)
         {
             bool replaced = UiaLastWordProbe.Run(operation, out string uiaResult);
-            return End(operation, replaced ? "UiaWholeValueReplaced" : "Aborted", $"reason={uiaResult}", timer);
+            return End(operation, replaced ? uiaResult : "Aborted", $"reason={uiaResult}", timer);
         }
         if (!supported)
             return End(operation, "Unsupported", $"reason=FocusedControlClassNotSupported className=\"{Escape(className)}\"", timer);
@@ -235,7 +235,7 @@ internal static class NativeEditLastWordService
     {
         string suffix = string.IsNullOrEmpty(details) ? string.Empty : " " + details;
         Log(operation, $"NATIVE LASTWORD END result={result}{suffix} durationMs={Milliseconds(timer)}");
-        return result is "Success" or "UiaWholeValueReplaced";
+        return result == "Success" || result.StartsWith("UiaWholeValueReplaced", StringComparison.Ordinal);
     }
 
     private static string Milliseconds(Stopwatch timer) =>
