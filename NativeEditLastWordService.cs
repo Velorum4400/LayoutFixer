@@ -47,6 +47,11 @@ internal static class NativeEditLastWordService
         Log(operation, $"NativeLastWord handler={handler}");
         if (focusedControl == IntPtr.Zero || !IsWindow(focusedControl) || focusedPid != targetPid)
             return End(operation, "Failed", "stage=GetFocusedControl reason=FocusedControlDoesNotMatchTarget", timer);
+        if (handler == NativeHandler.ChromiumProbe)
+        {
+            ChromiumNativeProbe.Run(operation, target, focusedControl, targetTid);
+            return End(operation, "DiagnosticOnly", "reason=ChromiumNativeProbeCompleted", timer);
+        }
         if (!supported)
             return End(operation, "Unsupported", $"reason=FocusedControlClassNotSupported className=\"{Escape(className)}\"", timer);
 
@@ -127,6 +132,7 @@ internal static class NativeEditLastWordService
         "Edit" => NativeHandler.Edit,
         // Keep this explicit allow-list. Other class names need their own manual validation.
         "RichEditD2DPT" => NativeHandler.RichEdit,
+        "Chrome_WidgetWin_1" => NativeHandler.ChromiumProbe,
         _ => NativeHandler.Unsupported
     };
 
@@ -245,7 +251,7 @@ internal static class NativeEditLastWordService
     private static void Log(TextReplacementOperation operation, string message) =>
         DiagnosticLogStore.Write($"operation={operation.Id:N} {message}");
 
-    private enum NativeHandler { Unsupported, Edit, RichEdit }
+    private enum NativeHandler { Unsupported, Edit, RichEdit, ChromiumProbe }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct GUITHREADINFO
