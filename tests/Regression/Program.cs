@@ -305,6 +305,21 @@ Check(!UiaWriteProbe.TryBuildReplacement("hello", 6, "x", out _, out _, out _, o
 Check(!UiaWriteProbe.TryBuildReplacement("hello", 5, "hello", out _, out _, out _, out _, out _, out string unchangedReason) &&
       unchangedReason == "ConversionUnchanged",
     "UIA whole-value plan rejects unchanged conversion");
+Check(LastWordLayoutResolver.Detect("Привет") == FragmentLayoutDetection.Russian &&
+      LastWordLayoutResolver.Detect("привет123") == FragmentLayoutDetection.Russian,
+    "Cyrillic fragments select Russian layout");
+Check(LastWordLayoutResolver.Detect("שלום") == FragmentLayoutDetection.Hebrew &&
+      LastWordLayoutResolver.Detect("שלום123") == FragmentLayoutDetection.Hebrew,
+    "Hebrew fragments select Hebrew layout");
+Check(LastWordLayoutResolver.Detect("hello") == FragmentLayoutDetection.English &&
+      LastWordLayoutResolver.Detect("hello123") == FragmentLayoutDetection.English,
+    "Latin fragments select English layout");
+Check(LastWordLayoutResolver.Detect("123-456") == FragmentLayoutDetection.Ambiguous &&
+      LastWordLayoutResolver.Detect("...") == FragmentLayoutDetection.Ambiguous,
+    "numeric and punctuation fragments are ambiguous");
+Check(LastWordLayoutResolver.Detect("teст") == FragmentLayoutDetection.Mixed &&
+      LastWordLayoutResolver.Detect("тש") == FragmentLayoutDetection.Mixed,
+    "mixed-script fragments remain mixed");
 
 Console.WriteLine($"{passed} regression checks passed.");
 
