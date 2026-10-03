@@ -120,6 +120,14 @@ public static class KeyboardLayoutService
         return english != null;
     }
 
+    public static bool TryGetByPrimaryLanguage(ushort languageId, out KeyboardLayoutInfo layout)
+    {
+        KeyboardLayoutInfo[] snapshot;
+        lock (Sync) snapshot = _layouts.ToArray();
+        layout = snapshot.FirstOrDefault(item => (item.LanguageId & 0x03ff) == languageId)!;
+        return layout != null;
+    }
+
     public static bool TryGetCurrentLayout(IntPtr targetWindow, out KeyboardLayoutInfo current)
     {
         current = default!;
