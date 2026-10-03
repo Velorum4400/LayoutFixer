@@ -108,11 +108,18 @@ internal static class UiaWriteProbe
             Log(operation, $"UiaWholeValue expectedCaretOffset={expectedOffset} naturalCaretOffset={natural} naturalCaretMatchesExpected={(naturalReadable && natural == expectedOffset)} caretRestoreNeeded={needed}");
             if (!needed) return true;
             TextPatternRange candidate = text.DocumentRange.Clone();
+            bool initialDegenerate = candidate.CompareEndpoints(TextPatternRangeEndpoint.Start, candidate, TextPatternRangeEndpoint.End) == 0;
+            Log(operation, $"UiaWholeValue CaretRange initialDegenerate={initialDegenerate}");
             candidate.MoveEndpointByRange(TextPatternRangeEndpoint.End, candidate, TextPatternRangeEndpoint.Start);
-            candidate.MoveEndpointByUnit(TextPatternRangeEndpoint.End, TextUnit.Character, expectedOffset);
+            bool collapsed = candidate.CompareEndpoints(TextPatternRangeEndpoint.Start, candidate, TextPatternRangeEndpoint.End) == 0;
+            int collapsedOffset = GetOffset(text, candidate);
+            Log(operation, $"UiaWholeValue CaretRange collapseToStart success={collapsed} afterCollapseOffset={collapsedOffset}");
+            if (!collapsed || collapsedOffset != 0) { reason = "CaretRangeCollapseFailed"; return false; }
+            int moved = candidate.Move(TextUnit.Character, expectedOffset);
+            Log(operation, $"UiaWholeValue CaretRange moveRequested={expectedOffset} moveActual={moved}");
             int resolved = GetOffset(text, candidate);
             bool degenerate = candidate.CompareEndpoints(TextPatternRangeEndpoint.Start, candidate, TextPatternRangeEndpoint.End) == 0;
-            Log(operation, $"UiaWholeValue caretRangeTargetOffset={expectedOffset} caretRangeResolvedOffset={resolved} caretRangeDegenerate={degenerate}");
+            Log(operation, $"UiaWholeValue CaretRange finalDegenerate={degenerate} finalResolvedOffset={resolved}");
             if (!degenerate || resolved != expectedOffset) { reason = "CaretRangeResolutionMismatch"; return false; }
             bool foreground = TextReplacementService.ForegroundWindow == operation.TargetWindow;
             bool focus = SameRuntimeId(AutomationElement.FocusedElement, runtimeId);
