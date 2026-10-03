@@ -146,7 +146,7 @@ public sealed class HotkeyService : IDisposable
                 }
                 RecordDecision(FormatMessage(message), key, false, first, pressedBefore, Snapshot(_pressed),
                     pendingBefore, Snapshot(_pending), suppressedBefore, Snapshot(_suppressed), setEquals, null, decision);
-                if (decision == "extra-key" && IsPotentialHotkeyKey(key))
+                if (IsTargetHotkeyRejection(_pressed, _keys, key, decision))
                     ReportRejected(key, pressedBefore, Snapshot(_pressed), pendingBefore, "extra-key");
             }
             if (up)
@@ -200,8 +200,19 @@ public sealed class HotkeyService : IDisposable
         DiagnosticLogStore.Write(HotkeyDiagnosticBuffer.FormatTail(30));
     }
 
-    private bool IsPotentialHotkeyKey(Keys key) =>
-        _keys.Contains(key) || key == Keys.Menu || key == Keys.Tab || key == Keys.Insert || key == Keys.Pause;
+    // A diagnostic rejection is meaningful only once the user has actually formed the
+    // configured chord and an additional retained key prevents an exact match.
+    internal static bool IsTargetHotkeyRejection(IReadOnlySet<Keys> pressed,
+        IReadOnlySet<Keys> configured, Keys currentKey, string decision)
+    {
+        if (decision != "extra-key" || !configured.Contains(currentKey) ||
+            pressed.Count <= configured.Count)
+            return false;
+        foreach (Keys key in configured)
+            if (!pressed.Contains(key))
+                return false;
+        return true;
+    }
 
     private static string Snapshot(IEnumerable<Keys>? keys)
     {
