@@ -1,4 +1,3 @@
-
 using System;
 using System.Diagnostics;
 using System.Windows;
@@ -9,7 +8,8 @@ namespace LayoutFixer;
 
 internal static class UiaLastWordProbe
 {
-    private const int PreviewLimit = 200, AncestorLimit = 6;
+    private const int PreviewLimit = 200, AncestorLimit = 6, MaxTraversalDepth = 8,
+        MaxTraversalElements = 240, TraversalBudgetMilliseconds = 800;
 
     public static void Run(TextReplacementOperation operation)
     {
@@ -26,19 +26,32 @@ internal static class UiaLastWordProbe
 
             var propertyTimer = Stopwatch.StartNew();
             bool password = Get(focused, AutomationElement.IsPasswordProperty, false);
-            LogElement(operation, "FOCUSED", focused, 0, password);
+            LogElement(operation, "ROOT", focused, 0, password);
             Log(operation, $"UiaProbe propertiesElapsedMs={Ms(propertyTimer)}");
             LogAncestors(operation, focused);
 
+            var traversalTimer = Stopwatch.StartNew();
+            TraversalResult traversal = FindEditableDescendant(operation, focused);
+            AutomationElement probeElement = traversal.Selected ?? focused;
+            Log(operation, $"UiaProbe traversal END visitedElements={traversal.Visited} interestingElements={traversal.Interesting} editCandidates={traversal.EditCandidates} focusedDescendantFound={traversal.FocusedDescendantFound} truncated={traversal.Truncated} reason={traversal.StopReason}");
+            if (traversal.Selected != null)
+            {
+                Log(operation, $"UiaProbe SELECTED_EDIT reason=\"{traversal.SelectionReason}\"");
+                password = Get(probeElement, AutomationElement.IsPasswordProperty, false);
+                LogElement(operation, "SELECTED_EDIT", probeElement, traversal.SelectedDepth, password);
+            }
+            else Log(operation, "UiaProbe selectedEdit=False reason=NoEditableDescendantFound");
+            Log(operation, $"UiaProbe traversalElapsedMs={Ms(traversalTimer)}");
+
             var patternsTimer = Stopwatch.StartNew();
-            bool hasValue = TryPattern(focused, ValuePattern.Pattern, out ValuePattern? valuePattern);
-            bool hasText = TryPattern(focused, TextPattern.Pattern, out TextPattern? textPattern);
+            bool hasValue = TryPattern(probeElement, ValuePattern.Pattern, out ValuePattern? valuePattern);
+            bool hasText = TryPattern(probeElement, TextPattern.Pattern, out TextPattern? textPattern);
             // The .NET 8 managed UIAutomationClient reference exposes TextPattern but not
             // TextPattern2/LegacyIAccessiblePattern. Keep that limitation explicit in logs.
             bool hasText2 = false;
             bool hasLegacy = false;
-            bool hasSelection = TryPattern(focused, SelectionPattern.Pattern, out SelectionPattern? selection);
-            bool hasSelectionItem = TryPattern(focused, SelectionItemPattern.Pattern, out SelectionItemPattern? selectionItem);
+            bool hasSelection = TryPattern(probeElement, SelectionPattern.Pattern, out SelectionPattern? selection);
+            bool hasSelectionItem = TryPattern(probeElement, SelectionItemPattern.Pattern, out SelectionItemPattern? selectionItem);
             Log(operation, $"UiaProbe patterns Value={hasValue} Text={hasText} Text2={hasText2} LegacyIAccessible={hasLegacy} Selection={hasSelection} SelectionItem={hasSelectionItem}");
             Log(operation, $"UiaProbe patternsElapsedMs={Ms(patternsTimer)}");
 
@@ -99,7 +112,7 @@ internal static class UiaLastWordProbe
                 }
                 Log(operation, $"UiaProbe lastWordElapsedMs={Ms(wordTimer)}");
             }
-            if (!textReadable && !hasValue) reason = "FocusedElementDoesNotExposeTextPatterns";
+            if (!textReadable && !hasValue) reason = traversal.Selected == null ? "NoEditableDescendantFound" : "SelectedElementDoesNotExposeTextPatterns";
         }
         catch (ElementNotAvailableException) { reason = "ElementNotAvailable"; Log(operation, "UiaProbe failure=ElementNotAvailable"); }
         catch (Exception ex) { reason = ex.GetType().Name; Log(operation, $"UiaProbe failure={ex.GetType().Name} message=\"{Escape(ex.Message)}\""); }
@@ -123,6 +136,74 @@ internal static class UiaLastWordProbe
         }
     }
 
+    private static TraversalResult FindEditableDescendant(TextReplacementOperation operation, AutomationElement root)
+    {
+        Log(operation, $"UiaProbe traversal BEGIN maxDepth={MaxTraversalDepth} maxElements={MaxTraversalElements} timeBudgetMs={TraversalBudgetMilliseconds}");
+        var stopwatch = Stopwatch.StartNew();
+        var pending = new Stack<(AutomationElement Element, int Depth)>();
+        TreeWalker walker = TreeWalker.RawViewWalker;
+        try
+        {
+            AutomationElement? child = walker.GetFirstChild(root);
+            if (child != null) pending.Push((child, 1));
+        }
+        catch { return new TraversalResult(0, 0, 0, false, false, "RootChildrenUnavailable", null, 0, ""); }
+
+        int visited = 0, interesting = 0, edits = 0;
+        bool focusedFound = false;
+        Candidate? best = null;
+        string stopReason = "Completed";
+        while (pending.Count > 0)
+        {
+            if (visited >= MaxTraversalElements) { stopReason = "MaxElements"; break; }
+            if (stopwatch.ElapsedMilliseconds >= TraversalBudgetMilliseconds) { stopReason = "TimeBudget"; break; }
+            (AutomationElement element, int depth) = pending.Pop();
+            visited++;
+            try
+            {
+                AutomationElement? sibling = walker.GetNextSibling(element);
+                if (sibling != null) pending.Push((sibling, depth));
+                bool focus = Get(element, AutomationElement.HasKeyboardFocusProperty, false);
+                bool focusable = Get(element, AutomationElement.IsKeyboardFocusableProperty, false);
+                bool enabled = Get(element, AutomationElement.IsEnabledProperty, false);
+                bool offscreen = Get(element, AutomationElement.IsOffscreenProperty, true);
+                ControlType type = Get(element, AutomationElement.ControlTypeProperty, ControlType.Custom);
+                bool edit = type == ControlType.Edit;
+                bool value = TryPattern(element, ValuePattern.Pattern, out ValuePattern? _);
+                bool text = TryPattern(element, TextPattern.Pattern, out TextPattern? _);
+                bool isInteresting = edit || focus || focusable || value || text;
+                if (isInteresting)
+                {
+                    interesting++;
+                    if (edit) edits++;
+                    int score = (focus ? 100 : 0) + (edit ? 40 : 0) + (focusable ? 20 : 0) +
+                        (enabled && !offscreen ? 10 : 0) + (text ? 8 : 0) + (value ? 5 : 0);
+                    Log(operation, $"UiaProbe DESCENDANT depth={depth} score={score} edit={edit} focus={focus} focusable={focusable} value={value} text={text}");
+                    LogElement(operation, edit ? "EDIT_CANDIDATE" : "INTERESTING", element, depth,
+                        Get(element, AutomationElement.IsPasswordProperty, false));
+                    if (focus) focusedFound = true;
+                    if (edit || focus || value || text)
+                    {
+                        var candidate = new Candidate(element, depth, score, focus, edit, text, value);
+                        if (best == null || candidate.Score > best.Score) best = candidate;
+                    }
+                }
+                if (depth < MaxTraversalDepth)
+                {
+                    AutomationElement? firstChild = walker.GetFirstChild(element);
+                    if (firstChild != null) pending.Push((firstChild, depth + 1));
+                }
+            }
+            catch (ElementNotAvailableException) { }
+            catch { }
+        }
+        bool truncated = stopReason != "Completed";
+        string selectionReason = best == null ? "" : best.Focused ? "HasKeyboardFocus=True" :
+            best.Edit ? "BestEditCandidate" : best.Text ? "BestTextPatternCandidate" : "BestValuePatternCandidate";
+        return new TraversalResult(visited, interesting, edits, focusedFound, truncated, stopReason,
+            best?.Element, best?.Depth ?? 0, selectionReason);
+    }
+
     private static void LogElement(TextReplacementOperation operation, string kind, AutomationElement element, int depth, bool password)
     {
         Log(operation, $"UiaProbe {kind} depth={depth} controlType=\"{Get(element, AutomationElement.ControlTypeProperty, ControlType.Custom).ProgrammaticName}\" name=\"{Escape(Get(element, AutomationElement.NameProperty, string.Empty))}\" automationId=\"{Escape(Get(element, AutomationElement.AutomationIdProperty, string.Empty))}\" className=\"{Escape(Get(element, AutomationElement.ClassNameProperty, string.Empty))}\" frameworkId=\"{Escape(Get(element, AutomationElement.FrameworkIdProperty, string.Empty))}\" processId={Get(element, AutomationElement.ProcessIdProperty, 0)} nativeHwnd=0x{Get(element, AutomationElement.NativeWindowHandleProperty, 0):X} hasKeyboardFocus={Get(element, AutomationElement.HasKeyboardFocusProperty, false)} keyboardFocusable={Get(element, AutomationElement.IsKeyboardFocusableProperty, false)} enabled={Get(element, AutomationElement.IsEnabledProperty, false)} offscreen={Get(element, AutomationElement.IsOffscreenProperty, false)} password={password} bounds={FormatRect(Get(element, AutomationElement.BoundingRectangleProperty, Rect.Empty))}");
@@ -136,5 +217,11 @@ internal static class UiaLastWordProbe
     private static string FormatRect(Rect r) => r.IsEmpty ? "empty" : $"{r.Left:F0},{r.Top:F0},{r.Right:F0},{r.Bottom:F0}";
     private static string Ms(Stopwatch s) => (s.ElapsedTicks * 1000.0 / Stopwatch.Frequency).ToString("F2", System.Globalization.CultureInfo.InvariantCulture) + "ms";
     private static void Log(TextReplacementOperation o, string m) => DiagnosticLogStore.Write($"operation={o.Id:N} {m}");
+
+    private sealed record Candidate(AutomationElement Element, int Depth, int Score, bool Focused,
+        bool Edit, bool Text, bool Value);
+    private sealed record TraversalResult(int Visited, int Interesting, int EditCandidates,
+        bool FocusedDescendantFound, bool Truncated, string StopReason, AutomationElement? Selected,
+        int SelectedDepth, string SelectionReason);
 }
 
