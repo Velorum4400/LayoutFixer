@@ -259,6 +259,22 @@ Check(HotkeyDefinition.IsModifierOnly(HotkeyDefinition.Parse("Ctrl+Shift")),
 Check(!HotkeyDefinition.IsModifierOnly(HotkeyDefinition.Parse("Ctrl+Shift+Left")) &&
       !HotkeyDefinition.IsModifierOnly(HotkeyDefinition.Parse("Insert")),
     "application shortcuts and Insert are not modifier-only hotkeys");
+Check(!HotkeyService.IsTargetHotkeyRejection(
+          new HashSet<System.Windows.Forms.Keys> { System.Windows.Forms.Keys.H },
+          HotkeyDefinition.Parse("Insert"), System.Windows.Forms.Keys.H, "extra-key"),
+    "ordinary typing is not a hotkey recognition rejection");
+Check(!HotkeyService.IsTargetHotkeyRejection(
+          new HashSet<System.Windows.Forms.Keys> { System.Windows.Forms.Keys.ShiftKey },
+          HotkeyDefinition.Parse("Ctrl+Shift"), System.Windows.Forms.Keys.ShiftKey, "extra-key"),
+    "partial FullText chord is not a hotkey recognition rejection");
+Check(HotkeyService.IsTargetHotkeyRejection(
+          new HashSet<System.Windows.Forms.Keys> { System.Windows.Forms.Keys.Menu, System.Windows.Forms.Keys.Insert },
+          HotkeyDefinition.Parse("Insert"), System.Windows.Forms.Keys.Insert, "extra-key"),
+    "Insert with stale Alt is a hotkey recognition rejection");
+Check(HotkeyService.IsTargetHotkeyRejection(
+          new HashSet<System.Windows.Forms.Keys> { System.Windows.Forms.Keys.Menu, System.Windows.Forms.Keys.ControlKey, System.Windows.Forms.Keys.ShiftKey },
+          HotkeyDefinition.Parse("Ctrl+Shift"), System.Windows.Forms.Keys.ShiftKey, "extra-key"),
+    "FullText chord with stale Alt is a hotkey recognition rejection");
 
 Console.WriteLine($"{passed} regression checks passed.");
 
