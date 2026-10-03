@@ -49,8 +49,8 @@ internal static class NativeEditLastWordService
             return End(operation, "Failed", "stage=GetFocusedControl reason=FocusedControlDoesNotMatchTarget", timer);
         if (handler == NativeHandler.ChromiumProbe)
         {
-            ChromiumNativeProbe.Run(operation, target, focusedControl, targetTid);
-            return End(operation, "DiagnosticOnly", "reason=ChromiumNativeProbeCompleted", timer);
+            UiaLastWordProbe.Run(operation);
+            return End(operation, "DiagnosticOnly", "reason=UiaLastWordProbeCompleted", timer);
         }
         if (!supported)
             return End(operation, "Unsupported", $"reason=FocusedControlClassNotSupported className=\"{Escape(className)}\"", timer);
