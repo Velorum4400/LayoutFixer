@@ -11,6 +11,12 @@ internal static class NativeEditLastWordService
     private const uint EM_GETSEL = 0x00B0;
     private const uint EM_SETSEL = 0x00B1;
     private const uint EM_REPLACESEL = 0x00C2;
+    private const uint WM_GETTEXT = 0x000D;
+    private const uint WM_GETTEXTLENGTH = 0x000E;
+    private const uint SMTO_ABORTIFHUNG = 0x0002;
+    private const uint MessageTimeoutMilliseconds = 250;
+    private const int MaxTextCharacters = 1_000_000;
+    private const int MaximumLoggedTextCharacters = 512;
 
     public static bool TryReplace(TextReplacementOperation operation, Stopwatch total)
     {
@@ -54,7 +60,7 @@ internal static class NativeEditLastWordService
         }
 
         var textTimer = Stopwatch.StartNew();
-        if (!TryGetText(focusedControl, out string text))
+        if (!TryGetText(operation, focusedControl, className, caret, out string text))
             return End(operation, "Failed", "stage=GetText reason=MessageFailed", timer);
         if (caret < 0 || caret > text.Length)
             return End(operation, "Failed", $"stage=GetText reason=CaretOutOfRange caret={caret} textLength={text.Length}", timer);
@@ -85,7 +91,7 @@ internal static class NativeEditLastWordService
         Log(operation, $"NativeLastWord EM_REPLACESEL result=0x{replaceResult.ToInt64():X}");
 
         var verifyTimer = Stopwatch.StartNew();
-        if (!TryGetText(focusedControl, out string afterText))
+        if (!TryGetText(operation, focusedControl, className, caret, out string afterText))
             return End(operation, "Failed", "stage=Verification reason=GetTextFailed", timer);
         bool replacementVerified = afterText.Length >= wordStart + converted.Length &&
             string.CompareOrdinal(afterText, wordStart, converted, 0, converted.Length) == 0;
@@ -130,15 +136,43 @@ internal static class NativeEditLastWordService
         }
     }
 
-    private static bool TryGetText(IntPtr edit, out string text)
+    private static bool TryGetText(TextReplacementOperation operation, IntPtr edit, string className,
+        int caret, out string text)
     {
         text = string.Empty;
-        int length = GetWindowTextLength(edit);
-        if (length < 0) return false;
-        var buffer = new StringBuilder(length + 1);
-        int copied = GetWindowText(edit, buffer, buffer.Capacity);
-        if (copied < 0) return false;
+        if (!SendMessageTimeout(edit, WM_GETTEXTLENGTH, UIntPtr.Zero, IntPtr.Zero,
+                SMTO_ABORTIFHUNG, MessageTimeoutMilliseconds, out UIntPtr lengthResult))
+        {
+            Log(operation, $"NativeLastWord WM_GETTEXTLENGTH failed hwnd=0x{edit.ToInt64():X} className=\"{Escape(className)}\" timeoutMs={MessageTimeoutMilliseconds}");
+            return false;
+        }
+        ulong reportedLength = lengthResult.ToUInt64();
+        Log(operation, $"NativeLastWord WM_GETTEXTLENGTH result={reportedLength}");
+        if (reportedLength > MaxTextCharacters)
+        {
+            Log(operation, $"NativeLastWord WM_GETTEXT failed hwnd=0x{edit.ToInt64():X} className=\"{Escape(className)}\" reason=TextTooLarge reportedLength={reportedLength}");
+            return false;
+        }
+        if (reportedLength == 0 && caret > 0)
+            Log(operation, $"NativeLastWord WARNING caret={caret} but WM_GETTEXTLENGTH=0");
+
+        int requestedCapacity = checked((int)reportedLength + 1);
+        var buffer = new StringBuilder(requestedCapacity);
+        if (!SendMessageTimeout(edit, WM_GETTEXT, (UIntPtr)(uint)requestedCapacity, buffer,
+                SMTO_ABORTIFHUNG, MessageTimeoutMilliseconds, out UIntPtr copiedResult))
+        {
+            Log(operation, $"NativeLastWord WM_GETTEXT failed hwnd=0x{edit.ToInt64():X} className=\"{Escape(className)}\" requestedCapacity={requestedCapacity} timeoutMs={MessageTimeoutMilliseconds}");
+            return false;
+        }
+        ulong copied = copiedResult.ToUInt64();
+        Log(operation, $"NativeLastWord WM_GETTEXT requestedCapacity={requestedCapacity} copiedChars={copied}");
+        if (copied > (ulong)reportedLength || copied >= (ulong)requestedCapacity)
+        {
+            Log(operation, $"NativeLastWord WM_GETTEXT failed hwnd=0x{edit.ToInt64():X} className=\"{Escape(className)}\" reason=UnexpectedCopyLength returnValue={copied}");
+            return false;
+        }
         text = buffer.ToString();
+        Log(operation, $"NativeLastWord text=\"{EscapeForLog(text)}\"");
         return true;
     }
 
@@ -161,6 +195,10 @@ internal static class NativeEditLastWordService
     private static string Escape(string value) => value.Replace("\\", "\\\\").Replace("\r", "\\r")
         .Replace("\n", "\\n").Replace("\t", "\\t");
 
+    private static string EscapeForLog(string value) => Escape(value.Length <= MaximumLoggedTextCharacters
+        ? value
+        : value[..MaximumLoggedTextCharacters] + "…");
+
     private static void Log(TextReplacementOperation operation, string message) =>
         DiagnosticLogStore.Write($"operation={operation.Id:N} {message}");
 
@@ -178,9 +216,15 @@ internal static class NativeEditLastWordService
     [DllImport("user32.dll", SetLastError = true)] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
     [DllImport("user32.dll", SetLastError = true)] private static extern bool GetGUIThreadInfo(uint threadId, ref GUITHREADINFO info);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern int GetClassName(IntPtr window, StringBuilder className, int maxCount);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowTextLength(IntPtr window);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr window, StringBuilder text, int maxCount);
     [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true, EntryPoint = "SendMessageTimeoutW")]
+    [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SendMessageTimeout(IntPtr window,
+        uint message, UIntPtr wParam, IntPtr lParam, uint flags, uint timeoutMilliseconds,
+        out UIntPtr result);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true, EntryPoint = "SendMessageTimeoutW")]
+    [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SendMessageTimeout(IntPtr window,
+        uint message, UIntPtr wParam, [Out] StringBuilder lParam, uint flags, uint timeoutMilliseconds,
+        out UIntPtr result);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "SendMessageW")] private static extern IntPtr SendMessageReplaceSel(IntPtr window, uint message, [MarshalAs(UnmanagedType.Bool)] bool canUndo, [MarshalAs(UnmanagedType.LPWStr)] string replacement);
 }
 
