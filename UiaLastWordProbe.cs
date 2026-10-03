@@ -136,8 +136,11 @@ internal static class UiaLastWordProbe
             Log(operation, $"UiaWholeValue textsEquivalent=True valueTextLength={valueText.Length} textPatternLength={documentText.Length}");
             if (valueText.Length > UiaWriteProbe.MaximumValueLength) { reason = "ValueTooLargeForExperimentalWholeValueReplacement"; result = reason; return false; }
             if (caretFromSelection == null || caretOffset < 0) { reason = "UnsupportedSelection"; result = reason; return false; }
+            LastWordSelectionAnalysis plannedAnalysis = LastWordSelectionAnalyzer.Analyze(valueText[..caretOffset]);
+            string sourceFragment = plannedAnalysis.HasFragment ? valueText.Substring(plannedAnalysis.FragmentStart, plannedAnalysis.FragmentLength) : string.Empty;
+            LastWordLayoutResolver.Apply(operation, sourceFragment, out _);
             if (!UiaWriteProbe.TryBuildReplacement(valueText, caretOffset,
-                    LayoutConverter.Convert(valueText.Substring(LastWordSelectionAnalyzer.Analyze(valueText[..caretOffset]).FragmentStart, LastWordSelectionAnalyzer.Analyze(valueText[..caretOffset]).FragmentLength), operation.SourceMap, operation.TargetMap, out _),
+                    LayoutConverter.Convert(sourceFragment, operation.SourceMap, operation.TargetMap, out _),
                     out int start, out int end, out string plannedFragment, out string replacement, out int expectedCaret, out reason))
             { result = reason; return false; }
             Log(operation, $"UiaWholeValue caretOffset={caretOffset} lastWordStart={start} lastWordEnd={end} oldLength={valueText.Length} newLength={replacement.Length} expectedCaretOffset={expectedCaret}");
