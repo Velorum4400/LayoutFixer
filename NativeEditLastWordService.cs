@@ -49,8 +49,8 @@ internal static class NativeEditLastWordService
             return End(operation, "Failed", "stage=GetFocusedControl reason=FocusedControlDoesNotMatchTarget", timer);
         if (handler == NativeHandler.ChromiumProbe)
         {
-            UiaLastWordProbe.Run(operation);
-            return End(operation, "DiagnosticOnly", "reason=UiaLastWordProbeCompleted", timer);
+            bool replaced = UiaLastWordProbe.Run(operation, out string uiaResult);
+            return End(operation, replaced ? "UiaWholeValueReplaced" : "Aborted", $"reason={uiaResult}", timer);
         }
         if (!supported)
             return End(operation, "Unsupported", $"reason=FocusedControlClassNotSupported className=\"{Escape(className)}\"", timer);
@@ -235,7 +235,7 @@ internal static class NativeEditLastWordService
     {
         string suffix = string.IsNullOrEmpty(details) ? string.Empty : " " + details;
         Log(operation, $"NATIVE LASTWORD END result={result}{suffix} durationMs={Milliseconds(timer)}");
-        return result == "Success";
+        return result is "Success" or "UiaWholeValueReplaced";
     }
 
     private static string Milliseconds(Stopwatch timer) =>
