@@ -1,3 +1,4 @@
+
 using System.Reflection;
 using LayoutFixer;
 
@@ -275,6 +276,12 @@ Check(HotkeyService.IsTargetHotkeyRejection(
           new HashSet<System.Windows.Forms.Keys> { System.Windows.Forms.Keys.Menu, System.Windows.Forms.Keys.ControlKey, System.Windows.Forms.Keys.ShiftKey },
           HotkeyDefinition.Parse("Ctrl+Shift"), System.Windows.Forms.Keys.ShiftKey, "extra-key"),
     "FullText chord with stale Alt is a hotkey recognition rejection");
+Check(UiaLastWordProbe.IsFocusedEditCandidate(true, true, true, false, false, true),
+    "focused editable TextPattern candidate bypasses traversal");
+Check(!UiaLastWordProbe.IsFocusedEditCandidate(true, false, true, false, false, true),
+    "unfocused Edit candidate does not bypass traversal");
+Check(!UiaLastWordProbe.IsFocusedEditCandidate(true, true, true, true, false, true),
+    "password Edit candidate does not bypass traversal");
 
 Console.WriteLine($"{passed} regression checks passed.");
 
