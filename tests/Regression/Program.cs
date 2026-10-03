@@ -1,4 +1,3 @@
-
 using System.Reflection;
 using LayoutFixer;
 
@@ -282,6 +281,24 @@ Check(!UiaLastWordProbe.IsFocusedEditCandidate(true, false, true, false, false, 
     "unfocused Edit candidate does not bypass traversal");
 Check(!UiaLastWordProbe.IsFocusedEditCandidate(true, true, true, true, false, true),
     "password Edit candidate does not bypass traversal");
+
+Check(UiaWriteProbe.TryBuildReplacement("hello Привет world", 12, "Ghbdtn", out int wordStart,
+        out int wordEnd, out string word, out string wholeValue, out int expectedCaret, out string planReason) &&
+      wordStart == 6 && wordEnd == 12 && word == "Привет" && wholeValue == "hello Ghbdtn world" &&
+      expectedCaret == 12 && planReason == string.Empty,
+    "UIA whole-value plan replaces a middle Unicode word and preserves expected caret offset");
+Check(UiaWriteProbe.TryBuildReplacement("тест.", 5, "ntcn.", out _, out _, out _, out string endReplacement,
+        out int endCaret, out _) && endReplacement == "ntcn." && endCaret == 5,
+    "UIA whole-value plan supports punctuation at end of value");
+Check(UiaWriteProbe.TryBuildReplacement("ab x", 4, "longer", out _, out _, out _, out string longerReplacement,
+        out int longerCaret, out _) && longerReplacement == "ab longer" && longerCaret == 9,
+    "UIA whole-value plan supports a longer converted fragment");
+Check(!UiaWriteProbe.TryBuildReplacement("hello", 6, "x", out _, out _, out _, out _, out _, out string boundsReason) &&
+      boundsReason == "CaretOutOfRange",
+    "UIA whole-value plan rejects invalid caret bounds");
+Check(!UiaWriteProbe.TryBuildReplacement("hello", 5, "hello", out _, out _, out _, out _, out _, out string unchangedReason) &&
+      unchangedReason == "ConversionUnchanged",
+    "UIA whole-value plan rejects unchanged conversion");
 
 Console.WriteLine($"{passed} regression checks passed.");
 
