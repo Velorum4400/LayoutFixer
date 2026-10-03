@@ -11,8 +11,9 @@ internal static class UiaLastWordProbe
     private const int PreviewLimit = 200, AncestorLimit = 6, MaxTraversalDepth = 8,
         MaxTraversalElements = 240, TraversalBudgetMilliseconds = 800;
 
-    public static void Run(TextReplacementOperation operation)
+    public static bool Run(TextReplacementOperation operation, out string result)
     {
+        result = "Aborted";
         var total = Stopwatch.StartNew();
         Log(operation, "UIA LASTWORD PROBE BEGIN");
         bool textReadable = false, selectionReadable = false, caretReadable = false, lastWordReadable = false;
@@ -22,7 +23,7 @@ internal static class UiaLastWordProbe
             var focusedTimer = Stopwatch.StartNew();
             AutomationElement focused = AutomationElement.FocusedElement;
             Log(operation, $"UiaProbe focusedElapsedMs={Ms(focusedTimer)}");
-            if (focused is null) { reason = "NoFocusedElement"; return; }
+            if (focused is null) { reason = "NoFocusedElement"; result = reason; return false; }
 
             var propertyTimer = Stopwatch.StartNew();
             bool password = Get(focused, AutomationElement.IsPasswordProperty, false);
@@ -67,11 +68,12 @@ internal static class UiaLastWordProbe
             Log(operation, $"UiaProbe patterns Value={hasValue} Text={hasText} Text2={hasText2} LegacyIAccessible={hasLegacy} Selection={hasSelection} SelectionItem={hasSelectionItem}");
             Log(operation, $"UiaProbe patternsElapsedMs={Ms(patternsTimer)}");
 
+            string? valueText = null;
             if (hasValue && valuePattern != null)
             {
                 bool readOnly = valuePattern.Current.IsReadOnly;
                 if (password) Log(operation, $"UiaProbe ValuePattern isReadOnly={readOnly} value=Protected");
-                else LogText(operation, "UiaProbe ValuePattern isReadOnly=" + readOnly, valuePattern.Current.Value);
+                else { valueText = valuePattern.Current.Value; LogText(operation, "UiaProbe ValuePattern isReadOnly=" + readOnly, valueText); }
             }
 
             string? documentText = null;
@@ -96,6 +98,7 @@ internal static class UiaLastWordProbe
             }
 
             string? beforeCaret = null;
+            int caretOffset = -1;
             if (!password && caretFromSelection != null && hasText && textPattern != null)
             {
                 var caretTimer = Stopwatch.StartNew();
@@ -104,7 +107,9 @@ internal static class UiaLastWordProbe
                 TextPatternRange prefix = textPattern.DocumentRange.Clone();
                 prefix.MoveEndpointByRange(TextPatternRangeEndpoint.End, caretFromSelection, TextPatternRangeEndpoint.Start);
                 beforeCaret = prefix.GetText(-1);
+                caretOffset = beforeCaret.Length;
                 LogText(operation, "UiaProbe textBeforeCaret", beforeCaret);
+                Log(operation, $"UiaProbe caretOffset={caretOffset} fullTextLength={documentText?.Length ?? -1}");
                 Log(operation, $"UiaProbe caretElapsedMs={Ms(caretTimer)}");
             }
 
@@ -124,16 +129,31 @@ internal static class UiaLastWordProbe
                 }
                 Log(operation, $"UiaProbe lastWordElapsedMs={Ms(wordTimer)}");
             }
-            if (!textReadable && !hasValue) reason = traversal.Selected == null ? "NoEditableDescendantFound" : "SelectedElementDoesNotExposeTextPatterns";
-            UiaWriteProbe.Run(operation, probeElement, hasValue, valuePattern, hasText, hasText2,
-                hasLegacy, selectionReadable, lastWordReadable);
+            if (!textReadable && !hasValue) { reason = traversal.Selected == null ? "NoEditableDescendantFound" : "SelectedElementDoesNotExposeTextPatterns"; result = reason; return false; }
+            if (password) { reason = "PasswordField"; result = reason; return false; }
+            if (valueText == null || documentText == null || !string.Equals(valueText, documentText, StringComparison.Ordinal))
+            { reason = "ValueAndTextPatternMismatch"; Log(operation, $"UiaWholeValue textsEquivalent=False valueTextLength={valueText?.Length ?? -1} textPatternLength={documentText?.Length ?? -1}"); result = reason; return false; }
+            Log(operation, $"UiaWholeValue textsEquivalent=True valueTextLength={valueText.Length} textPatternLength={documentText.Length}");
+            if (valueText.Length > UiaWriteProbe.MaximumValueLength) { reason = "ValueTooLargeForExperimentalWholeValueReplacement"; result = reason; return false; }
+            if (caretFromSelection == null || caretOffset < 0) { reason = "UnsupportedSelection"; result = reason; return false; }
+            if (!UiaWriteProbe.TryBuildReplacement(valueText, caretOffset,
+                    LayoutConverter.Convert(valueText.Substring(LastWordSelectionAnalyzer.Analyze(valueText[..caretOffset]).FragmentStart, LastWordSelectionAnalyzer.Analyze(valueText[..caretOffset]).FragmentLength), operation.SourceMap, operation.TargetMap, out _),
+                    out int start, out int end, out string plannedFragment, out string replacement, out int expectedCaret, out reason))
+            { result = reason; return false; }
+            Log(operation, $"UiaWholeValue caretOffset={caretOffset} lastWordStart={start} lastWordEnd={end} oldLength={valueText.Length} newLength={replacement.Length} expectedCaretOffset={expectedCaret}");
+            LogText(operation, "UiaWholeValue fragment", plannedFragment);
+            string plannedConverted = replacement.Substring(start, expectedCaret - start);
+            LogText(operation, "UiaWholeValue converted", plannedConverted);
+            bool success = UiaWriteProbe.TryReplace(operation, probeElement, probeElement.GetRuntimeId(), valueText, replacement, expectedCaret, out result);
+            reason = result;
+            return success;
         }
-        catch (ElementNotAvailableException) { reason = "ElementNotAvailable"; Log(operation, "UiaProbe failure=ElementNotAvailable"); }
-        catch (Exception ex) { reason = ex.GetType().Name; Log(operation, $"UiaProbe failure={ex.GetType().Name} message=\"{Escape(ex.Message)}\""); }
+        catch (ElementNotAvailableException) { reason = "ElementNotAvailable"; result = reason; Log(operation, "UiaProbe failure=ElementNotAvailable"); return false; }
+        catch (Exception ex) { reason = ex.GetType().Name; result = reason; Log(operation, $"UiaProbe failure={ex.GetType().Name} message=\"{Escape(ex.Message)}\""); return false; }
         finally
         {
             Log(operation, "UIA LASTWORD PROBE SUMMARY");
-            Log(operation, $"UiaProbe textReadable={textReadable} selectionReadable={selectionReadable} caretReadable={caretReadable} lastWordReadable={lastWordReadable} replacementAttempted=False reason={reason}");
+            Log(operation, $"UiaProbe textReadable={textReadable} selectionReadable={selectionReadable} caretReadable={caretReadable} lastWordReadable={lastWordReadable} result={result} reason={reason}");
             Log(operation, $"UiaProbe PERF total={Ms(total)}");
             Log(operation, $"UIA LASTWORD PROBE END durationMs={Ms(total)}");
         }
