@@ -293,6 +293,12 @@ Check(UiaWriteProbe.TryBuildReplacement("тест.", 5, "ntcn.", out _, out _, o
 Check(UiaWriteProbe.TryBuildReplacement("ab x", 4, "longer", out _, out _, out _, out string longerReplacement,
         out int longerCaret, out _) && longerReplacement == "ab longer" && longerCaret == 9,
     "UIA whole-value plan supports a longer converted fragment");
+Check(UiaWriteProbe.TryBuildReplacement("ab longer", 9, "x", out _, out _, out _, out string shorterReplacement,
+        out int shorterCaret, out _) && shorterReplacement == "ab x" && shorterCaret == 4,
+    "UIA whole-value plan supports a shorter converted fragment");
+Check(!UiaWriteProbe.TryBuildReplacement("hello", 0, "x", out _, out _, out _, out _, out int zeroCaret,
+        out string zeroReason) && zeroCaret == 0 && zeroReason == "NoFragmentBeforeCaret",
+    "UIA whole-value plan rejects a start-of-text caret with no word");
 Check(!UiaWriteProbe.TryBuildReplacement("hello", 6, "x", out _, out _, out _, out _, out _, out string boundsReason) &&
       boundsReason == "CaretOutOfRange",
     "UIA whole-value plan rejects invalid caret bounds");
