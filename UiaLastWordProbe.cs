@@ -30,18 +30,30 @@ internal static class UiaLastWordProbe
             Log(operation, $"UiaProbe propertiesElapsedMs={Ms(propertyTimer)}");
             LogAncestors(operation, focused);
 
-            var traversalTimer = Stopwatch.StartNew();
-            TraversalResult traversal = FindEditableDescendant(operation, focused);
-            AutomationElement probeElement = traversal.Selected ?? focused;
+            bool focusedSuitable = IsSuitableFocusedEdit(focused, password);
+            TraversalResult traversal;
+            AutomationElement probeElement;
+            if (focusedSuitable)
+            {
+                probeElement = focused;
+                traversal = TraversalResult.FocusedElement;
+                Log(operation, "UiaLastWord selectedSource=FocusedElement descendantTraversal=False");
+            }
+            else
+            {
+                var traversalTimer = Stopwatch.StartNew();
+                traversal = FindEditableDescendant(operation, focused);
+                probeElement = traversal.Selected ?? focused;
+                Log(operation, $"UiaLastWord selectedSource=DescendantTraversal descendantTraversal=True elapsedMs={Ms(traversalTimer)}");
+            }
             Log(operation, $"UiaProbe traversal END visitedElements={traversal.Visited} interestingElements={traversal.Interesting} editCandidates={traversal.EditCandidates} focusedDescendantFound={traversal.FocusedDescendantFound} truncated={traversal.Truncated} reason={traversal.StopReason}");
-            if (traversal.Selected != null)
+            if (focusedSuitable || traversal.Selected != null)
             {
                 Log(operation, $"UiaProbe SELECTED_EDIT reason=\"{traversal.SelectionReason}\"");
                 password = Get(probeElement, AutomationElement.IsPasswordProperty, false);
                 LogElement(operation, "SELECTED_EDIT", probeElement, traversal.SelectedDepth, password);
             }
             else Log(operation, "UiaProbe selectedEdit=False reason=NoEditableDescendantFound");
-            Log(operation, $"UiaProbe traversalElapsedMs={Ms(traversalTimer)}");
 
             var patternsTimer = Stopwatch.StartNew();
             bool hasValue = TryPattern(probeElement, ValuePattern.Pattern, out ValuePattern? valuePattern);
@@ -113,6 +125,8 @@ internal static class UiaLastWordProbe
                 Log(operation, $"UiaProbe lastWordElapsedMs={Ms(wordTimer)}");
             }
             if (!textReadable && !hasValue) reason = traversal.Selected == null ? "NoEditableDescendantFound" : "SelectedElementDoesNotExposeTextPatterns";
+            UiaWriteProbe.Run(operation, probeElement, hasValue, valuePattern, hasText, hasText2,
+                hasLegacy, selectionReadable, lastWordReadable);
         }
         catch (ElementNotAvailableException) { reason = "ElementNotAvailable"; Log(operation, "UiaProbe failure=ElementNotAvailable"); }
         catch (Exception ex) { reason = ex.GetType().Name; Log(operation, $"UiaProbe failure={ex.GetType().Name} message=\"{Escape(ex.Message)}\""); }
@@ -135,6 +149,18 @@ internal static class UiaLastWordProbe
             LogElement(operation, "ANCESTOR", current, depth, Get(current, AutomationElement.IsPasswordProperty, false));
         }
     }
+
+    internal static bool IsFocusedEditCandidate(bool isEdit, bool hasKeyboardFocus, bool enabled,
+        bool password, bool hasValuePattern, bool hasTextPattern) =>
+        isEdit && hasKeyboardFocus && enabled && !password && (hasValuePattern || hasTextPattern);
+
+    private static bool IsSuitableFocusedEdit(AutomationElement element, bool password) =>
+        IsFocusedEditCandidate(
+            Get(element, AutomationElement.ControlTypeProperty, ControlType.Custom) == ControlType.Edit,
+            Get(element, AutomationElement.HasKeyboardFocusProperty, false),
+            Get(element, AutomationElement.IsEnabledProperty, false), password,
+            TryPattern(element, ValuePattern.Pattern, out ValuePattern? _),
+            TryPattern(element, TextPattern.Pattern, out TextPattern? _));
 
     private static TraversalResult FindEditableDescendant(TextReplacementOperation operation, AutomationElement root)
     {
@@ -222,6 +248,10 @@ internal static class UiaLastWordProbe
         bool Edit, bool Text, bool Value);
     private sealed record TraversalResult(int Visited, int Interesting, int EditCandidates,
         bool FocusedDescendantFound, bool Truncated, string StopReason, AutomationElement? Selected,
-        int SelectedDepth, string SelectionReason);
+        int SelectedDepth, string SelectionReason)
+    {
+        public static TraversalResult FocusedElement { get; } = new(0, 0, 1, true, false,
+            "FocusedElementSelected", null, 0, "FocusedElement");
+    }
 }
 
