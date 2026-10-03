@@ -76,6 +76,19 @@ internal static class TextReplacementService
             operation.SourceMap = sourceMap;
             operation.TargetMap = targetMap;
 
+            // This branch is intentionally isolated from the Clipboard/keyboard-selection path.
+            // NativeEditLastWordService either completes the edit or leaves the target untouched.
+            if (operation.Type == TextReplacementOperationType.LastWord)
+            {
+                bool nativeSuccess = NativeEditLastWordService.TryReplace(operation, total);
+                if (nativeSuccess)
+                {
+                    Log("SUCCESS");
+                    Log($"LastWord PERF SUMMARY result=SUCCESS TOTAL={total.ElapsedMilliseconds} ms");
+                }
+                return nativeSuccess;
+            }
+
             var clipboardTimer = Stopwatch.StartNew();
             if (!ClipboardService.TryCaptureStable(out ClipboardSnapshot initialSnapshot,
                     out uint initialSnapshotSequence, out long snapshotElapsed))
@@ -92,20 +105,7 @@ internal static class TextReplacementService
                 Log($"FAIL: selection preparation failed for OperationType={operation.Type}");
                 return false;
             }
-            if (operation.Type == TextReplacementOperationType.LastWord)
-            {
-                if (!operation.LastWordDirectReplaceReady)
-                {
-                    Log("CANCEL: LastWord Direct Replace candidate was not prepared");
-                    return false;
-                }
-
-                operation.SourceText = operation.LastWordSearchFragment;
-                operation.ConvertedText = operation.LastWordCandidateReplacement;
-                operation.CopyTextLength = operation.SourceText.Length;
-                Log($"LastWord DIRECT-REPLACE paste: selectionLength={operation.LastWordSearchSelectionLength}, replacementLength={operation.ConvertedText.Length}");
-            }
-            else
+            if (operation.Type != TextReplacementOperationType.LastWord)
             {
                 if (operation.Type == TextReplacementOperationType.FullText)
                     Thread.Sleep(30);
@@ -173,12 +173,9 @@ internal static class TextReplacementService
                 Log($"Clipboard early restore not required: current sequence={operation.RestoreSnapshotSequence} already represents the latest external snapshot");
             }
 
-            if (operation.Type != TextReplacementOperationType.LastWord)
-            {
-                operation.ConvertedText = LayoutConverter.Convert(operation.SourceText, sourceMap,
-                    targetMap, out int unchangedCount);
-                Log($"Conversion result: success=True, sourceLength={operation.SourceText.Length}, convertedLength={operation.ConvertedText.Length}, unchanged={unchangedCount}");
-            }
+            operation.ConvertedText = LayoutConverter.Convert(operation.SourceText, sourceMap,
+                targetMap, out int unchangedCount);
+            Log($"Conversion result: success=True, sourceLength={operation.SourceText.Length}, convertedLength={operation.ConvertedText.Length}, unchanged={unchangedCount}");
 
             if (GetForegroundWindow() != targetWindow)
                 return Fail("active window changed before Clipboard write", targetWindow);
