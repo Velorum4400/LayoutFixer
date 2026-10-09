@@ -6,6 +6,8 @@ internal enum FragmentLayoutDetection { Ambiguous, Mixed, English, Russian, Hebr
 
 internal static class LastWordLayoutResolver
 {
+    private static readonly object Sync = new();
+    private static LastWordLayoutContext? _context;
     internal static FragmentLayoutDetection Detect(string fragment)
     {
         bool latin = false, cyrillic = false, hebrew = false;
@@ -21,12 +23,14 @@ internal static class LastWordLayoutResolver
         return latin ? FragmentLayoutDetection.English : cyrillic ? FragmentLayoutDetection.Russian : FragmentLayoutDetection.Hebrew;
     }
 
-    internal static bool Apply(TextReplacementOperation operation, string fragment, out string reason)
+    internal static bool Apply(TextReplacementOperation operation, string fragment, int fragmentStart, int caretOffset, out string reason)
     {
         KeyboardLayoutInfo active = operation.SourceLayout;
         FragmentLayoutDetection detection = Detect(fragment);
         if (detection is FragmentLayoutDetection.Ambiguous or FragmentLayoutDetection.Mixed)
         {
+            if (detection == FragmentLayoutDetection.Mixed && TryApplyContext(operation, fragment, fragmentStart, caretOffset, active, out reason))
+                return true;
             reason = "ActiveKeyboardLayoutFallback";
             Log(operation, fragment, detection, active, active, operation.TargetLayout, reason);
             return false;
@@ -47,8 +51,40 @@ internal static class LastWordLayoutResolver
         return true;
     }
 
+    internal static void RecordVerifiedConversion(TextReplacementOperation operation, string sourceFragment,
+        string convertedFragment, int fragmentStart, int caretOffset)
+    {
+        lock (Sync) _context = new LastWordLayoutContext(operation.TargetWindow, sourceFragment, convertedFragment,
+            operation.SourceLayout, operation.TargetLayout, fragmentStart, caretOffset);
+    }
+
+    private static bool TryApplyContext(TextReplacementOperation operation, string fragment, int start, int caret,
+        KeyboardLayoutInfo active, out string reason)
+    {
+        LastWordLayoutContext? context;
+        lock (Sync) context = _context;
+        if (context == null || context.TargetWindow != operation.TargetWindow || context.ConvertedFragment != fragment ||
+            context.FragmentStart != start || context.CaretOffset != caret)
+        {
+            reason = "PreviousVerifiedConversionUnavailable";
+            return false;
+        }
+        if (!KeyboardLayoutService.TryGetNext(context.TargetLayout, out KeyboardLayoutInfo target) ||
+            !KeyboardLayoutService.TryGetMap(context.TargetLayout, out KeyboardLayoutMap sourceMap) ||
+            !KeyboardLayoutService.TryGetMap(target, out KeyboardLayoutMap targetMap))
+        { reason = "PreviousVerifiedConversionUnavailable"; return false; }
+        operation.SourceLayout = context.TargetLayout; operation.TargetLayout = target;
+        operation.SourceMap = sourceMap; operation.TargetMap = targetMap;
+        reason = "PreviousVerifiedConversion";
+        Log(operation, fragment, FragmentLayoutDetection.Mixed, active, context.TargetLayout, target, reason);
+        return true;
+    }
+
     private static void Log(TextReplacementOperation operation, string fragment, FragmentLayoutDetection detection,
         KeyboardLayoutInfo active, KeyboardLayoutInfo source, KeyboardLayoutInfo target, string reason) =>
         DiagnosticLogStore.Write($"operation={operation.Id:N} activeLayout={active.ShortName} fragmentLayoutDetection={detection} conversionSourceLayout={source.ShortName} conversionTargetLayout={target.ShortName} layoutSourceReason={reason} fragmentLength={fragment.Length}");
+
+    private sealed record LastWordLayoutContext(IntPtr TargetWindow, string SourceFragment, string ConvertedFragment,
+        KeyboardLayoutInfo SourceLayout, KeyboardLayoutInfo TargetLayout, int FragmentStart, int CaretOffset);
 }
 
