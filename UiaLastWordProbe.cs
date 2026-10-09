@@ -149,7 +149,6 @@ internal static class UiaLastWordProbe
             string fullText = documentText;
             LastWordSelectionAnalysis plannedAnalysis = LastWordSelectionAnalyzer.Analyze(fullText[..caretOffset]);
             string sourceFragment = plannedAnalysis.HasFragment ? fullText.Substring(plannedAnalysis.FragmentStart, plannedAnalysis.FragmentLength) : string.Empty;
-            LastWordLayoutResolver.Apply(operation, sourceFragment, plannedAnalysis.FragmentStart, caretOffset, out _);
             string converted = LayoutConverter.Convert(sourceFragment, operation.SourceMap, operation.TargetMap, out _);
             if (LastWordLayoutOnlyCompletion.IsUnchanged(sourceFragment, converted))
             {

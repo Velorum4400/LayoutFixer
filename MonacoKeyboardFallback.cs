@@ -19,7 +19,6 @@ internal static class MonacoKeyboardFallback
             if (!foreground || !editorVerified) { result = "MonacoKeyboardFocusChanged"; return false; }
             if (!ClipboardService.TryCaptureStable(out snapshot, out _, out _)) { result = "MonacoKeyboardClipboardSnapshotFailed"; return false; }
             if (!TryCopySelectedToken(operation, out string source)) return false;
-            LastWordLayoutResolver.Apply(operation, source, 0, source.Length, out _);
             string converted = LayoutConverter.Convert(source, operation.SourceMap, operation.TargetMap, out _);
             Log(operation, $"CopiedTextLength={source.Length} ConversionSource={operation.SourceLayout.ShortName} ConversionTarget={operation.TargetLayout.ShortName} ConvertedTextLength={converted.Length}");
             if (LastWordLayoutOnlyCompletion.IsUnchanged(source, converted))

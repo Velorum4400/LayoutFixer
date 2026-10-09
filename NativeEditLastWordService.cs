@@ -97,7 +97,6 @@ internal static class NativeEditLastWordService
         int wordStart = analysis.FragmentStart;
         int wordEnd = wordStart + analysis.FragmentLength;
         string fragment = beforeCaret.Substring(wordStart, analysis.FragmentLength);
-        LastWordLayoutResolver.Apply(operation, fragment, wordStart, caret, out _);
         var convertTimer = Stopwatch.StartNew();
         string converted = LayoutConverter.Convert(fragment, operation.SourceMap, operation.TargetMap,
             out int unchangedCount);

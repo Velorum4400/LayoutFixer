@@ -60,7 +60,6 @@ internal static class WindowsSearchLastWordHandler
             Log(operation, $"WordRangeStart={wordStart} WordRangeEnd={wordStart + analysis.FragmentLength}");
             LogText(operation, "WordText", fragment);
             Log(operation, $"WordDetectionMs={wordDetection.ElapsedMilliseconds}");
-            LastWordLayoutResolver.Apply(operation, fragment, wordStart, caret, out _);
             string converted = LayoutConverter.Convert(fragment, operation.SourceMap, operation.TargetMap, out _);
             Log(operation, $"ConversionSource={operation.SourceLayout.ShortName} ConversionTarget={operation.TargetLayout.ShortName}");
             LogText(operation, "Converted", converted);

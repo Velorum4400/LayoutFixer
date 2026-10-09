@@ -88,6 +88,8 @@ if (english != null && russian != null && hebrew != null)
     Check(LayoutConverter.Convert("GHBDTN", Map(english), Map(russian), out _) == "ПРИВЕТ" &&
           LayoutConverter.Convert("ПРИВЕТ", Map(russian), Map(english), out _) == "GHBDTN",
         "uppercase Russian and English conversions still replace text");
+    Check(LayoutConverter.Convert("GHBDTN", Map(hebrew), Map(russian), out _) == "ПРИВЕТ",
+        "resolved Hebrew-to-Russian LastWord conversion does not reselect English-to-Hebrew");
     Check(LayoutConverter.Convert("😀\tunsupported\r\n", Map(english), Map(russian), out _) == "😀\tгтыгззщкеув\r\n",
         "unsupported Unicode and whitespace are preserved");
 }
