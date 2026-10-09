@@ -146,6 +146,103 @@ Check(typeof(LayoutConverter).GetMethods(BindingFlags.Public | BindingFlags.Stat
     .All(method => !method.GetParameters().Any(parameter => parameter.ParameterType.Name.Contains("Clipboard"))),
     "layout converter has no Clipboard dependency");
 
+const int WmKeyDown = 0x0100;
+const int WmKeyUp = 0x0101;
+const int WmSysKeyDown = 0x0104;
+const int WmSysKeyUp = 0x0105;
+using (var staleTabProvider = new FakePhysicalKeyStateProvider())
+using (var staleTab = new HotkeyService("TestInsert", staleTabProvider, installHook: false) { Hotkey = "Insert" })
+{
+    int dispatchCount = 0;
+    staleTab.Pressed += () => dispatchCount++;
+    staleTab.ProcessKeyEventForTesting(WmKeyDown, System.Windows.Forms.Keys.Tab);
+    staleTabProvider.Set(System.Windows.Forms.Keys.Tab, false);
+    staleTab.ProcessKeyEventForTesting(WmKeyDown, System.Windows.Forms.Keys.Insert);
+    staleTab.ProcessKeyEventForTesting(WmKeyUp, System.Windows.Forms.Keys.Insert);
+    Check(dispatchCount == 1 && staleTab.PressedKeysForTesting == "[]",
+        "stale Tab is recovered and Insert dispatches exactly once");
+}
+using (var heldTabProvider = new FakePhysicalKeyStateProvider())
+using (var heldTab = new HotkeyService("TestInsert", heldTabProvider, installHook: false) { Hotkey = "Insert" })
+{
+    int dispatchCount = 0;
+    heldTab.Pressed += () => dispatchCount++;
+    heldTab.ProcessKeyEventForTesting(WmKeyDown, System.Windows.Forms.Keys.Tab);
+    heldTabProvider.Set(System.Windows.Forms.Keys.Tab, true);
+    heldTab.ProcessKeyEventForTesting(WmKeyDown, System.Windows.Forms.Keys.Insert);
+    heldTab.ProcessKeyEventForTesting(WmKeyUp, System.Windows.Forms.Keys.Insert);
+    Check(dispatchCount == 0 && heldTab.PressedKeysForTesting == "[Tab]",
+        "physically held Tab remains and blocks Insert");
+}
+using (var modifiersProvider = new FakePhysicalKeyStateProvider())
+using (var modifiers = new HotkeyService("TestFull", modifiersProvider, installHook: false) { Hotkey = "Ctrl+Shift" })
+{
+    int dispatchCount = 0;
+    modifiers.Pressed += () => dispatchCount++;
+    modifiersProvider.Set(System.Windows.Forms.Keys.ControlKey, true);
+    modifiers.ProcessKeyEventForTesting(WmKeyDown, System.Windows.Forms.Keys.ControlKey);
+    modifiersProvider.Set(System.Windows.Forms.Keys.ShiftKey, true);
+    modifiers.ProcessKeyEventForTesting(WmKeyDown, System.Windows.Forms.Keys.ShiftKey);
+    modifiersProvider.Set(System.Windows.Forms.Keys.ShiftKey, false);
+    modifiers.ProcessKeyEventForTesting(WmKeyUp, System.Windows.Forms.Keys.ShiftKey);
+    modifiersProvider.Set(System.Windows.Forms.Keys.ControlKey, false);
+    modifiers.ProcessKeyEventForTesting(WmKeyUp, System.Windows.Forms.Keys.ControlKey);
+    modifiersProvider.Set(System.Windows.Forms.Keys.ShiftKey, true);
+    modifiers.ProcessKeyEventForTesting(WmKeyDown, System.Windows.Forms.Keys.ShiftKey);
+    modifiersProvider.Set(System.Windows.Forms.Keys.ControlKey, true);
+    modifiers.ProcessKeyEventForTesting(WmKeyDown, System.Windows.Forms.Keys.ControlKey);
+    modifiersProvider.Set(System.Windows.Forms.Keys.ControlKey, false);
+    modifiers.ProcessKeyEventForTesting(WmKeyUp, System.Windows.Forms.Keys.ControlKey);
+    modifiersProvider.Set(System.Windows.Forms.Keys.ShiftKey, false);
+    modifiers.ProcessKeyEventForTesting(WmKeyUp, System.Windows.Forms.Keys.ShiftKey);
+    Check(dispatchCount == 2 && modifiers.PressedKeysForTesting == "[]",
+        "Ctrl Shift fires once in either press and release order");
+}
+using (var altTabProvider = new FakePhysicalKeyStateProvider())
+using (var altTab = new HotkeyService("TestInsert", altTabProvider, installHook: false) { Hotkey = "Insert" })
+{
+    int dispatchCount = 0;
+    altTab.Pressed += () => dispatchCount++;
+    altTabProvider.Set(System.Windows.Forms.Keys.Menu, true);
+    altTab.ProcessKeyEventForTesting(WmSysKeyDown, System.Windows.Forms.Keys.Menu);
+    altTabProvider.Set(System.Windows.Forms.Keys.Tab, true);
+    altTab.ProcessKeyEventForTesting(WmSysKeyDown, System.Windows.Forms.Keys.Tab);
+    altTabProvider.Set(System.Windows.Forms.Keys.Menu, false);
+    altTab.ProcessKeyEventForTesting(WmSysKeyUp, System.Windows.Forms.Keys.Menu);
+    altTabProvider.Set(System.Windows.Forms.Keys.Tab, false); // Simulate a lost WM_SYSKEYUP for Tab.
+    altTab.ProcessKeyEventForTesting(WmKeyDown, System.Windows.Forms.Keys.Insert);
+    altTab.ProcessKeyEventForTesting(WmKeyUp, System.Windows.Forms.Keys.Insert);
+    Check(dispatchCount == 1 && altTab.PressedKeysForTesting == "[]",
+        "lost system Tab release is recovered before the next Insert");
+}
+using (var repeatedProvider = new FakePhysicalKeyStateProvider())
+using (var repeated = new HotkeyService("TestInsert", repeatedProvider, installHook: false) { Hotkey = "Insert" })
+{
+    int dispatchCount = 0;
+    repeated.Pressed += () => dispatchCount++;
+    for (int index = 0; index < 2; index++)
+    {
+        repeated.ProcessKeyEventForTesting(WmKeyDown, System.Windows.Forms.Keys.Insert);
+        repeated.ProcessKeyEventForTesting(WmKeyUp, System.Windows.Forms.Keys.Insert);
+    }
+    Check(dispatchCount == 2, "repeated Insert dispatches once per press");
+}
+using (var pendingProvider = new FakePhysicalKeyStateProvider())
+using (var pending = new HotkeyService("TestInsert", pendingProvider, installHook: false) { Hotkey = "Insert" })
+{
+    int dispatchCount = 0;
+    pending.Pressed += () => dispatchCount++;
+    pendingProvider.Set(System.Windows.Forms.Keys.Insert, true);
+    pending.ProcessKeyEventForTesting(WmKeyDown, System.Windows.Forms.Keys.Insert);
+    pendingProvider.Set(System.Windows.Forms.Keys.Tab, true);
+    pending.ProcessKeyEventForTesting(WmKeyDown, System.Windows.Forms.Keys.Tab);
+    pendingProvider.Set(System.Windows.Forms.Keys.Insert, false);
+    pendingProvider.Set(System.Windows.Forms.Keys.Tab, false);
+    pending.ProcessKeyEventForTesting(WmKeyDown, System.Windows.Forms.Keys.N);
+    Check(dispatchCount == 0 && pending.PressedKeysForTesting == "[N]" &&
+          pending.PendingKeysForTesting == "null" && pending.SuppressedKeysForTesting == "[]",
+        "recovery clears stale pending and suppressed state without a false dispatch");
+}
 Exception? staFailure = null;
 var staThread = new Thread(() =>
 {
@@ -364,4 +461,13 @@ Check(MonacoLastWordFallback.IsAccessibleDocumentText("Привет\r\nGhbdtn") 
     "Monaco fallback rejects accessibility service text");
 
 Console.WriteLine($"{passed} regression checks passed.");
+
+sealed class FakePhysicalKeyStateProvider : IPhysicalKeyStateProvider, IDisposable
+{
+    private readonly Dictionary<System.Windows.Forms.Keys, bool> _states = new();
+    public void Set(System.Windows.Forms.Keys key, bool isDown) => _states[key] = isDown;
+    public bool TryGetIsKeyDown(System.Windows.Forms.Keys key, out bool isDown) =>
+        _states.TryGetValue(key, out isDown);
+    public void Dispose() { }
+}
 

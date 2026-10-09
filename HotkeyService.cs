@@ -15,6 +15,7 @@ public sealed class HotkeyService : IDisposable
     private const int WM_SYSKEYDOWN = 0x0104;
     private const int WM_SYSKEYUP = 0x0105;
     private const uint LLKHF_INJECTED = 0x00000010;
+    private readonly IPhysicalKeyStateProvider _physicalKeyStateProvider;
     private readonly LowLevelKeyboardProc _callback;
     private readonly IntPtr _hook;
     private readonly string _diagnosticName;
@@ -61,10 +62,22 @@ public sealed class HotkeyService : IDisposable
     }
 
     public HotkeyService(string diagnosticName = "Unknown")
+        : this(diagnosticName, new NativePhysicalKeyStateProvider(), installHook: true)
+    {
+    }
+
+    internal HotkeyService(string diagnosticName, IPhysicalKeyStateProvider physicalKeyStateProvider,
+        bool installHook)
     {
         _diagnosticName = diagnosticName;
+        _physicalKeyStateProvider = physicalKeyStateProvider ?? throw new ArgumentNullException(nameof(physicalKeyStateProvider));
         _callback = HookCallback;
         _installThreadId = GetCurrentThreadId();
+        if (!installHook)
+        {
+            _hook = IntPtr.Zero;
+            return;
+        }
         using Process process = Process.GetCurrentProcess();
         using ProcessModule? module = process.MainModule;
         _hook = SetWindowsHookEx(WH_KEYBOARD_LL, _callback, GetModuleHandle(module?.ModuleName), 0);
@@ -90,22 +103,40 @@ public sealed class HotkeyService : IDisposable
             int message = wParam.ToInt32();
             bool injected = (data.flags & LLKHF_INJECTED) != 0;
             Keys key = HotkeyDefinition.Normalize((Keys)data.vkCode);
-            if (injected)
-            {
-                RecordDecision(FormatMessage(message), key, true, null, Snapshot(_pressed), Snapshot(_pressed),
-                    Snapshot(_pending), Snapshot(_pending), Snapshot(_suppressed), Snapshot(_suppressed), null, null,
-                    "injected-ignored");
-                return CallNextHookEx(_hook, nCode, wParam, lParam);
-            }
-            bool down = message == WM_KEYDOWN || message == WM_SYSKEYDOWN;
-            bool up = message == WM_KEYUP || message == WM_SYSKEYUP;
-            if (!down && !up)
-            {
-                RecordDecision(FormatMessage(message), key, false, null, Snapshot(_pressed), Snapshot(_pressed),
-                    Snapshot(_pending), Snapshot(_pending), Snapshot(_suppressed), Snapshot(_suppressed), null, null,
-                    "message-ignored");
-                return CallNextHookEx(_hook, nCode, wParam, lParam);
-            }
+            bool suppress = ProcessKeyEvent(message, key, injected);
+            return suppress ? (IntPtr)1 : CallNextHookEx(_hook, nCode, wParam, lParam);
+        }
+        catch (Exception ex) { DiagnosticLogStore.Write($"Hotkey hook callback exception: hotkey={_hotkey}, type={ex.GetType().Name}, message={ex.Message}"); return CallNextHookEx(_hook, nCode, wParam, lParam); }
+    }
+
+    // This entry point shares the production recognition path and exists only for deterministic regression tests.
+    internal bool ProcessKeyEventForTesting(int message, Keys key, bool injected = false) =>
+        ProcessKeyEvent(message, HotkeyDefinition.Normalize(key), injected);
+
+    internal string PressedKeysForTesting => Snapshot(_pressed);
+    internal string PendingKeysForTesting => Snapshot(_pending);
+    internal string SuppressedKeysForTesting => Snapshot(_suppressed);
+
+    private bool ProcessKeyEvent(int message, Keys key, bool injected)
+    {
+        if (injected)
+        {
+            RecordDecision(FormatMessage(message), key, true, null, Snapshot(_pressed), Snapshot(_pressed),
+                Snapshot(_pending), Snapshot(_pending), Snapshot(_suppressed), Snapshot(_suppressed), null, null,
+                "injected-ignored");
+            return false;
+        }
+        bool down = message == WM_KEYDOWN || message == WM_SYSKEYDOWN;
+        bool up = message == WM_KEYUP || message == WM_SYSKEYUP;
+        if (!down && !up)
+        {
+            RecordDecision(FormatMessage(message), key, false, null, Snapshot(_pressed), Snapshot(_pressed),
+                Snapshot(_pending), Snapshot(_pending), Snapshot(_suppressed), Snapshot(_suppressed), null, null,
+                "message-ignored");
+            return false;
+        }
+        if (down)
+            RecoverReleasedKeys(key);
             string pressedBefore = Snapshot(_pressed);
             string pendingBefore = Snapshot(_pending);
             string suppressedBefore = Snapshot(_suppressed);
@@ -134,7 +165,7 @@ public sealed class HotkeyService : IDisposable
                         RecordDecision(FormatMessage(message), key, false, first, pressedBefore, Snapshot(_pressed),
                             pendingBefore, Snapshot(_pending), suppressedBefore, Snapshot(_suppressed), setEquals, null,
                             decision);
-                        return (IntPtr)1;
+                        return true;
                     }
                 }
                 if (_suppressed.Contains(key))
@@ -142,7 +173,7 @@ public sealed class HotkeyService : IDisposable
                     RecordDecision(FormatMessage(message), key, false, first, pressedBefore, Snapshot(_pressed),
                         pendingBefore, Snapshot(_pending), suppressedBefore, Snapshot(_suppressed), setEquals, null,
                         "suppressed");
-                    return (IntPtr)1;
+                    return true;
                 }
                 RecordDecision(FormatMessage(message), key, false, first, pressedBefore, Snapshot(_pressed),
                     pendingBefore, Snapshot(_pending), suppressedBefore, Snapshot(_suppressed), setEquals, null, decision);
@@ -163,8 +194,7 @@ public sealed class HotkeyService : IDisposable
                     DiagnosticLogStore.Write($"Hotkey pressed: hotkey={_hotkey}, hook=0x{_hook.ToInt64():X}");
                     HotkeyDiagnosticBuffer.RecordDispatch($"Pressed invoked operationHotkey={_diagnosticName}");
                     Pressed?.Invoke();
-                    if (suppress) return (IntPtr)1;
-                    return CallNextHookEx(_hook, nCode, wParam, lParam);
+                    return suppress;
                 }
                 if (_pending != null)
                     decision = "waiting-keyup";
@@ -172,11 +202,42 @@ public sealed class HotkeyService : IDisposable
                     decision = "suppressed";
                 RecordDecision(FormatMessage(message), key, false, null, pressedBefore, Snapshot(_pressed),
                     pendingBefore, Snapshot(_pending), suppressedBefore, Snapshot(_suppressed), null, pendingOverlaps, decision);
-                if (suppress) return (IntPtr)1;
+                if (suppress) return true;
             }
-            return CallNextHookEx(_hook, nCode, wParam, lParam);
+        return false;
+    }
+
+    private void RecoverReleasedKeys(Keys triggerKey)
+    {
+        if (_pressed.Count == 0)
+            return;
+
+        string pressedBefore = Snapshot(_pressed);
+        var staleKeys = new List<Keys>();
+        foreach (Keys trackedKey in _pressed)
+        {
+            // GetAsyncKeyState is documented as potentially lagging for the current event.
+            // A tracked key other than this key was already present before this callback.
+            if (trackedKey == triggerKey)
+                continue;
+            if (_physicalKeyStateProvider.TryGetIsKeyDown(trackedKey, out bool isDown) && !isDown)
+                staleKeys.Add(trackedKey);
         }
-        catch (Exception ex) { DiagnosticLogStore.Write($"Hotkey hook callback exception: hotkey={_hotkey}, type={ex.GetType().Name}, message={ex.Message}"); return CallNextHookEx(_hook, nCode, wParam, lParam); }
+        if (staleKeys.Count == 0)
+            return;
+
+        foreach (Keys staleKey in staleKeys)
+        {
+            _pressed.Remove(staleKey);
+            _suppressed.Remove(staleKey);
+        }
+        if (_pending != null && staleKeys.Exists(_pending.Contains))
+            _pending = null;
+
+        DiagnosticLogStore.Write(
+            $"HOTKEY STATE RECOVERY: hook={_diagnosticName} staleKeys={Snapshot(staleKeys)} " +
+            $"pressedBefore={pressedBefore} pressedAfter={Snapshot(_pressed)} " +
+            $"triggerKey={triggerKey} reason=PhysicalKeyReleased");
     }
 
     private void RecordDecision(string eventName, Keys key, bool injected, bool? first,
@@ -256,5 +317,36 @@ public sealed class HotkeyService : IDisposable
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(
         IntPtr window, out uint processId);
+}
+
+// A false return means that the desktop state could not be established safely. Callers
+// must retain their tracked state in that case rather than guessing that a key is up.
+internal interface IPhysicalKeyStateProvider
+{
+    bool TryGetIsKeyDown(Keys key, out bool isDown);
+}
+
+internal sealed class NativePhysicalKeyStateProvider : IPhysicalKeyStateProvider
+{
+    public bool TryGetIsKeyDown(Keys key, out bool isDown)
+    {
+        // On an inaccessible desktop GetAsyncKeyState returns zero for every key. A low-level
+        // callback should not normally arrive there, but retaining state is safer than treating
+        // that ambiguous zero as a release.
+        if (GetForegroundWindow() == IntPtr.Zero)
+        {
+            isDown = false;
+            return false;
+        }
+
+        isDown = (GetAsyncKeyState((int)key) & unchecked((short)0x8000)) != 0;
+        return true;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int virtualKey);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
 }
 
