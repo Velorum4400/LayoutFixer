@@ -138,7 +138,7 @@ internal static class UiaLastWordProbe
             if (caretFromSelection == null || caretOffset < 0) { reason = "UnsupportedSelection"; result = reason; return false; }
             LastWordSelectionAnalysis plannedAnalysis = LastWordSelectionAnalyzer.Analyze(valueText[..caretOffset]);
             string sourceFragment = plannedAnalysis.HasFragment ? valueText.Substring(plannedAnalysis.FragmentStart, plannedAnalysis.FragmentLength) : string.Empty;
-            LastWordLayoutResolver.Apply(operation, sourceFragment, out _);
+            LastWordLayoutResolver.Apply(operation, sourceFragment, plannedAnalysis.FragmentStart, caretOffset, out _);
             if (!UiaWriteProbe.TryBuildReplacement(valueText, caretOffset,
                     LayoutConverter.Convert(sourceFragment, operation.SourceMap, operation.TargetMap, out _),
                     out int start, out int end, out string plannedFragment, out string replacement, out int expectedCaret, out reason))
@@ -147,7 +147,8 @@ internal static class UiaLastWordProbe
             LogText(operation, "UiaWholeValue fragment", plannedFragment);
             string plannedConverted = replacement.Substring(start, expectedCaret - start);
             LogText(operation, "UiaWholeValue converted", plannedConverted);
-            bool success = UiaWriteProbe.TryReplace(operation, probeElement, probeElement.GetRuntimeId(), valueText, replacement, expectedCaret, out result);
+            bool success = UiaWriteProbe.TryReplace(operation, probeElement, probeElement.GetRuntimeId(), valueText, replacement,
+                plannedFragment, plannedConverted, start, expectedCaret, out result);
             reason = result;
             return success;
         }
