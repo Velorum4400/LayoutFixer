@@ -91,7 +91,7 @@ internal static class NativeEditLastWordService
         int wordStart = analysis.FragmentStart;
         int wordEnd = wordStart + analysis.FragmentLength;
         string fragment = beforeCaret.Substring(wordStart, analysis.FragmentLength);
-        LastWordLayoutResolver.Apply(operation, fragment, out _);
+        LastWordLayoutResolver.Apply(operation, fragment, wordStart, caret, out _);
         var convertTimer = Stopwatch.StartNew();
         string converted = LayoutConverter.Convert(fragment, operation.SourceMap, operation.TargetMap,
             out int unchangedCount);
@@ -116,6 +116,8 @@ internal static class NativeEditLastWordService
         Log(operation, $"NativeLastWord verification expected=\"{EscapeForLog(converted)}\" actual=\"{EscapeForLog(actual)}\" success={replacementVerified}");
         if (!replacementVerified)
             return End(operation, "Failed", "stage=Verification reason=ReplacementNotObserved", timer);
+        LastWordLayoutResolver.RecordVerifiedConversion(operation, fragment, converted, wordStart,
+            wordStart + converted.Length);
 
         bool switched = KeyboardLayoutService.SwitchLayout(target, operation.TargetLayout);
         Log(operation, $"NativeLastWord layoutSwitch success={switched} target={operation.TargetLayout.DisplayName}");
