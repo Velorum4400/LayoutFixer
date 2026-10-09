@@ -147,6 +147,14 @@ internal static class UiaLastWordProbe
             LogText(operation, "UiaWholeValue fragment", plannedFragment);
             string plannedConverted = replacement.Substring(start, expectedCaret - start);
             LogText(operation, "UiaWholeValue converted", plannedConverted);
+            if (hasText && textPattern != null && MonacoLastWordFallback.IsMonacoEditor(probeElement))
+            {
+                Log(operation, "UiaLastWord handler=MonacoLastWordFallback");
+                bool monacoSuccess = MonacoLastWordFallback.TryReplace(operation, probeElement, textPattern,
+                    valueText, replacement, start, plannedFragment.Length, expectedCaret, out result);
+                reason = result;
+                return monacoSuccess;
+            }
             bool success = UiaWriteProbe.TryReplace(operation, probeElement, probeElement.GetRuntimeId(), valueText, replacement,
                 plannedFragment, plannedConverted, start, expectedCaret, out result);
             reason = result;
