@@ -358,6 +358,9 @@ Check(MonacoLastWordFallback.IsMonacoClassPair("native-edit-context", "monaco-ed
       !MonacoLastWordFallback.IsMonacoClassPair("native-edit-context", "ProseMirror") &&
       !MonacoLastWordFallback.IsMonacoClassPair("other", "monaco-editor"),
     "Monaco fallback requires native edit context and Monaco parent");
+Check(MonacoLastWordFallback.IsAccessibleDocumentText("Привет\r\nGhbdtn") &&
+      !MonacoLastWordFallback.IsAccessibleDocumentText("Screen reader optimized mode is not available"),
+    "Monaco fallback rejects accessibility service text");
 
 Console.WriteLine($"{passed} regression checks passed.");
 
