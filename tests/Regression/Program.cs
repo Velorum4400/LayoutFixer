@@ -145,6 +145,39 @@ Check(typeof(TextReplacementService).Assembly.GetType("LayoutFixer.TextFixer") =
 Check(typeof(LayoutConverter).GetMethods(BindingFlags.Public | BindingFlags.Static)
     .All(method => !method.GetParameters().Any(parameter => parameter.ParameterType.Name.Contains("Clipboard"))),
     "layout converter has no Clipboard dependency");
+Check(UiaTargetedReplacement.TryBuildPlan("цшт", 3, "win", out int shortStart, out int shortLength,
+        out string shortFragment, out string shortExpected, out int shortCaret, out _) &&
+      shortStart == 0 && shortLength == 3 && shortFragment == "цшт" && shortExpected == "win" && shortCaret == 3,
+    "Chromium targeted plan replaces a word in an empty field");
+Check(UiaTargetedReplacement.TryBuildPlan("hello цшт", 9, "win", out int middleStart, out int middleLength,
+        out _, out string middleExpected, out int middleCaret, out _) &&
+      middleStart == 6 && middleLength == 3 && middleExpected == "hello win" && middleCaret == 9,
+    "Chromium targeted plan preserves text before a final word");
+Check(UiaTargetedReplacement.TryBuildPlan("hello цшт world", 9, "win", out int embeddedStart, out _,
+        out _, out string embeddedExpected, out int embeddedCaret, out _) &&
+      embeddedStart == 6 && embeddedExpected == "hello win world" && embeddedCaret == 9,
+    "Chromium targeted plan preserves text after the caret");
+Check(UiaTargetedReplacement.TryBuildPlan("цшт tail", 3, "win", out int leadingStart, out _,
+        out _, out string leadingExpected, out _, out _) && leadingStart == 0 && leadingExpected == "win tail",
+    "Chromium targeted plan supports a word at document start");
+string longChromiumText = new string('a', 6000) + " цшт";
+Check(UiaTargetedReplacement.TryBuildPlan(longChromiumText, longChromiumText.Length, "win", out int longStart,
+        out _, out _, out string longExpected, out int longCaret, out _) &&
+      longStart == 6001 && longExpected.EndsWith(" win", StringComparison.Ordinal) && longCaret == longExpected.Length,
+    "Chromium targeted plan supports documents longer than 5000 characters");
+Check(UiaTargetedReplacement.TryBuildPlan("one\nцшт\nשךם", 7, "win", out _, out _, out _,
+        out string paragraphExpected, out _, out _) && paragraphExpected == "one\nwin\nשךם",
+    "Chromium targeted plan preserves paragraphs and adjacent Hebrew text");
+Check(UiaTargetedReplacement.TryBuildPlan("abcd", 4, "я", out _, out _, out _,
+        out string shorterExpected, out int targetedShorterCaret, out _) && shorterExpected == "я" && targetedShorterCaret == 1,
+    "Chromium targeted plan supports replacement text of a different length");
+Check(!UiaTargetedReplacement.TryBuildPlan("", 0, "win", out _, out _, out _, out _, out _, out string noWordReason) &&
+      noWordReason == "NoFragmentBeforeCaret",
+    "Chromium targeted plan rejects an absent last word");
+Check(!UiaTargetedReplacement.TryBuildPlan("hello", 6, "win", out _, out _, out _, out _, out _, out string invalidCaretReason) &&
+      invalidCaretReason == "CaretOutOfRange",
+    "Chromium targeted plan rejects an unverified caret offset");
+
 
 const int WmKeyDown = 0x0100;
 const int WmKeyUp = 0x0101;

@@ -16,6 +16,7 @@ internal static class KeyboardInputService
     private const uint INPUT_KEYBOARD = 1;
     private const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
     private const uint KEYEVENTF_KEYUP = 0x0002;
+    private const uint KEYEVENTF_UNICODE = 0x0004;
     private static readonly HashSet<int> ExtendedVirtualKeys = new()
     {
         // Navigation/editing cluster, right-side modifiers, Windows/App keys,
@@ -30,6 +31,20 @@ internal static class KeyboardInputService
     public static bool SelectPreviousWord(LastWordSearchDirection direction) =>
         SendChord(VK_CONTROL, VK_SHIFT, direction == LastWordSearchDirection.Left ? VK_LEFT : VK_RIGHT);
     public static bool CollapseSelectionToEnd() => SendKey(VK_RIGHT);
+
+    // Sends UTF-16 code units directly to the focused control. This preserves a UIA-created
+    // selection and lets the target editor perform its normal replace-selection/Undo behavior.
+    public static bool SendUnicodeText(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return false;
+        var inputs = new INPUT[text.Length * 2];
+        for (int index = 0; index < text.Length; index++)
+        {
+            inputs[index * 2] = CreateUnicode(text[index], false);
+            inputs[index * 2 + 1] = CreateUnicode(text[index], true);
+        }
+        return SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>()) == inputs.Length;
+    }
 
     private static bool SendKey(int key)
     {
@@ -68,6 +83,20 @@ internal static class KeyboardInputService
             {
                 virtualKey = (ushort)virtualKey,
                 flags = GetKeyboardEventFlags(virtualKey, keyUp),
+                extraInfo = GetMessageExtraInfo()
+            }
+        }
+    };
+
+    private static INPUT CreateUnicode(char character, bool keyUp) => new()
+    {
+        type = INPUT_KEYBOARD,
+        union = new InputUnion
+        {
+            keyboard = new KEYBDINPUT
+            {
+                scanCode = character,
+                flags = KEYEVENTF_UNICODE | (keyUp ? KEYEVENTF_KEYUP : 0),
                 extraInfo = GetMessageExtraInfo()
             }
         }
