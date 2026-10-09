@@ -187,6 +187,25 @@ Check(!UiaTargetedReplacement.TryBuildPlan("hello", 6, "win", out _, out _, out 
     "Chromium targeted plan rejects an unverified caret offset");
 
 
+Check(WindowsSearchLastWordHandler.TryResolveWordRange("שלום", 0, out int rtlRightStart,
+        out int rtlRightLength, out string rtlRightDirection, out string rtlRightReason) &&
+      rtlRightStart == 0 && rtlRightLength == 4 && rtlRightDirection == "RTL" &&
+      rtlRightReason == "LogicalWordAfterCaret",
+    "Windows Search resolves a Hebrew word from its visual-right logical caret");
+Check(WindowsSearchLastWordHandler.TryResolveWordRange("שלום", 4, out int rtlLeftStart,
+        out int rtlLeftLength, out string rtlLeftDirection, out string rtlLeftReason) &&
+      rtlLeftStart == 0 && rtlLeftLength == 4 && rtlLeftDirection == "RTL" &&
+      rtlLeftReason == "LogicalWordBeforeCaret",
+    "Windows Search resolves a Hebrew word from its visual-left logical caret");
+Check(WindowsSearchLastWordHandler.TryResolveWordRange("hello", 5, out int ltrStart,
+        out int ltrLength, out string ltrDirection, out _) &&
+      ltrStart == 0 && ltrLength == 5 && ltrDirection == "LTR",
+    "Windows Search retains LTR end-of-word resolution");
+Check(WindowsSearchLastWordHandler.TryResolveWordRange("тест", 2, out int insideStart,
+        out int insideLength, out string insideDirection, out string insideReason) &&
+      insideStart == 0 && insideLength == 4 && insideDirection == "LTR" &&
+      insideReason == "CaretInsideWord",
+    "Windows Search expands a caret inside a word without directional movement");
 const int WmKeyDown = 0x0100;
 const int WmKeyUp = 0x0101;
 const int WmSysKeyDown = 0x0104;

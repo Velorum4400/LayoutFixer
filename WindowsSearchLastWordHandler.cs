@@ -53,11 +53,20 @@ internal static class WindowsSearchLastWordHandler
             Log(operation, $"CaretOffset={caret} CaretReadMs={caretRead.ElapsedMilliseconds}");
 
             var wordDetection = Stopwatch.StartNew();
-            LastWordSelectionAnalysis analysis = LastWordSelectionAnalyzer.Analyze(documentText[..caret]);
-            if (!analysis.HasFragment) { result = "WindowsSearchWordNotFound"; return false; }
-            int wordStart = analysis.FragmentStart;
-            string fragment = documentText.Substring(wordStart, analysis.FragmentLength);
-            Log(operation, $"WordRangeStart={wordStart} WordRangeEnd={wordStart + analysis.FragmentLength}");
+            TextDirection direction = DetectTextDirection(documentText, caret);
+            LastWordSelectionAnalysis preceding = LastWordSelectionAnalyzer.Analyze(documentText[..caret]);
+            Log(operation, $"TextDirection={direction}");
+            Log(operation, $"CaretOffsetBefore={caret}");
+            Log(operation, "CaretAdjustmentRequired=False");
+            Log(operation, $"CaretOffsetAfterAdjustment={caret}");
+            Log(operation, preceding.HasFragment
+                ? $"WordRangeBefore={preceding.FragmentStart}-{preceding.FragmentStart + preceding.FragmentLength}"
+                : "WordRangeBefore=none");
+            if (!TryResolveWordRange(documentText, caret, direction, out int wordStart, out int wordLength,
+                    out string rangeReason))
+            { result = "WindowsSearchWordNotFound"; return false; }
+            string fragment = documentText.Substring(wordStart, wordLength);
+            Log(operation, $"WordRangeAfter={wordStart}-{wordStart + wordLength} reason={rangeReason}");
             LogText(operation, "WordText", fragment);
             Log(operation, $"WordDetectionMs={wordDetection.ElapsedMilliseconds}");
             string converted = LayoutConverter.Convert(fragment, operation.SourceMap, operation.TargetMap, out _);
@@ -65,13 +74,12 @@ internal static class WindowsSearchLastWordHandler
             LogText(operation, "Converted", converted);
             if (LastWordLayoutOnlyCompletion.IsUnchanged(fragment, converted))
                 return LastWordLayoutOnlyCompletion.TryComplete(operation, "WindowsSearch", out result);
-            if (!UiaTargetedReplacement.TryBuildPlan(documentText, caret, converted, out int start,
-                    out int length, out string plannedFragment, out string expectedDocument, out int expectedCaret,
-                    out string planReason))
-            { result = MapPlanFailure(planReason); return false; }
+
+            string expectedDocument = documentText[..wordStart] + converted + documentText[(wordStart + wordLength)..];
+            int expectedCaret = wordStart + converted.Length;
 
             bool replaced = UiaTargetedReplacement.TryReplace(operation, target, text, target.GetRuntimeId(),
-                documentText, start, length, plannedFragment, converted, expectedDocument, expectedCaret,
+                documentText, wordStart, wordLength, fragment, converted, expectedDocument, expectedCaret,
                 "WindowsSearch", "WindowsSearchSuccess", out string replacementResult);
             result = MapReplacementResult(replacementResult);
             if (replaced && result == "WindowsSearchSuccess")
@@ -227,6 +235,97 @@ internal static class WindowsSearchLastWordHandler
         string.Equals(automationId, "SearchTextBox", StringComparison.Ordinal) &&
         string.Equals(frameworkId, "XAML", StringComparison.Ordinal) &&
         hasKeyboardFocus && keyboardFocusable && enabled && !offscreen && writable;
+
+    internal static bool TryResolveWordRange(string text, int caret, out int start, out int length,
+        out string direction, out string reason)
+    {
+        TextDirection resolvedDirection = DetectTextDirection(text, caret);
+        direction = resolvedDirection.ToString();
+        return TryResolveWordRange(text, caret, resolvedDirection, out start, out length, out reason);
+    }
+
+    private static bool TryResolveWordRange(string text, int caret, TextDirection direction,
+        out int start, out int length, out string reason)
+    {
+        start = length = 0;
+        reason = "NoAdjacentWord";
+        if (caret < 0 || caret > text.Length)
+        {
+            reason = "CaretOutOfRange";
+            return false;
+        }
+
+        int left = caret;
+        while (left > 0 && !char.IsWhiteSpace(text[left - 1])) left--;
+        int right = caret;
+        while (right < text.Length && !char.IsWhiteSpace(text[right])) right++;
+        bool touchesLeft = left < caret;
+        bool touchesRight = right > caret;
+        if (touchesLeft || touchesRight)
+        {
+            start = left;
+            length = right - left;
+            reason = touchesLeft && touchesRight ? "CaretInsideWord" :
+                touchesLeft ? "LogicalWordBeforeCaret" : "LogicalWordAfterCaret";
+            return length > 0;
+        }
+
+        int previousEnd = caret;
+        while (previousEnd > 0 && char.IsWhiteSpace(text[previousEnd - 1])) previousEnd--;
+        int previousStart = previousEnd;
+        while (previousStart > 0 && !char.IsWhiteSpace(text[previousStart - 1])) previousStart--;
+
+        int nextStart = caret;
+        while (nextStart < text.Length && char.IsWhiteSpace(text[nextStart])) nextStart++;
+        int nextEnd = nextStart;
+        while (nextEnd < text.Length && !char.IsWhiteSpace(text[nextEnd])) nextEnd++;
+
+        bool hasPrevious = previousStart < previousEnd;
+        bool hasNext = nextStart < nextEnd;
+        if (direction == TextDirection.RTL && hasNext || !hasPrevious && hasNext)
+        {
+            start = nextStart;
+            length = nextEnd - nextStart;
+            reason = "LogicalWordAfterWhitespace";
+            return true;
+        }
+        if (hasPrevious)
+        {
+            start = previousStart;
+            length = previousEnd - previousStart;
+            reason = "LogicalWordBeforeWhitespace";
+            return true;
+        }
+        return false;
+    }
+
+    private static TextDirection DetectTextDirection(string text, int caret)
+    {
+        for (int index = Math.Clamp(caret, 0, text.Length); index < text.Length; index++)
+            if (TryGetStrongDirection(text[index], out TextDirection direction)) return direction;
+        for (int index = Math.Min(caret - 1, text.Length - 1); index >= 0; index--)
+            if (TryGetStrongDirection(text[index], out TextDirection direction)) return direction;
+        return TextDirection.LTR;
+    }
+
+    private static bool TryGetStrongDirection(char character, out TextDirection direction)
+    {
+        if ((character >= '\u0590' && character <= '\u08FF') ||
+            (character >= '\uFB1D' && character <= '\uFEFC'))
+        {
+            direction = TextDirection.RTL;
+            return true;
+        }
+        if (char.IsLetter(character))
+        {
+            direction = TextDirection.LTR;
+            return true;
+        }
+        direction = default;
+        return false;
+    }
+
+    private enum TextDirection { LTR, RTL }
 
     private static int Offset(TextPattern text, TextPatternRange range, TextPatternRangeEndpoint endpoint)
     {
