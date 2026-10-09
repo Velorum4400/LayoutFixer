@@ -54,9 +54,20 @@ if (english != null && hebrew != null)
     Check(LayoutConverter.Convert("akuo", Map(english), Map(hebrew), out _) == "שלום",
         "physical key conversion English to Hebrew");
     string hebrewLower = LayoutConverter.Convert("ghbdtn", Map(english), Map(hebrew), out _);
-    Check(LayoutConverter.Convert("Ghbdtn", Map(english), Map(hebrew), out _) == hebrewLower &&
-          LayoutConverter.Convert("GHBDTN", Map(english), Map(hebrew), out _) == hebrewLower,
-        "English uppercase maps to Hebrew physical keys without retaining Latin Shift output");
+    Check(LayoutConverter.Convert("Ghbdtn", Map(english), Map(hebrew), out _) == "G" + hebrewLower[1..] &&
+          LayoutConverter.Convert("GHBDTN", Map(english), Map(hebrew), out _) == "GHBDTN",
+        "English Shift state is preserved when converting to Hebrew");
+    if (russian != null)
+    {
+        string mixedHebrew = LayoutConverter.Convert("Ghbdtn", Map(english), Map(hebrew), out _);
+        var first = new TextReplacementOperation { TargetWindow = (IntPtr)123, SourceLayout = english, TargetLayout = hebrew, SourceMap = Map(english), TargetMap = Map(hebrew) };
+        LastWordLayoutResolver.RecordVerifiedConversion(first, "Ghbdtn", mixedHebrew, 0, mixedHebrew.Length);
+        var next = new TextReplacementOperation { TargetWindow = (IntPtr)123, SourceLayout = russian, TargetLayout = english, SourceMap = Map(russian), TargetMap = Map(english) };
+        Check(LastWordLayoutResolver.Apply(next, mixedHebrew, 0, mixedHebrew.Length, out string contextReason) &&
+              next.SourceLayout.Handle == hebrew.Handle && next.TargetLayout.Handle == russian.Handle &&
+              contextReason == "PreviousVerifiedConversion",
+            "verified mixed Hebrew result continues from previous target layout");
+    }
 }
 if (english != null && russian != null && hebrew != null)
 {
