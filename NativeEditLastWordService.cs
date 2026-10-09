@@ -62,9 +62,9 @@ internal static class NativeEditLastWordService
         }
         if (handler == NativeHandler.WindowsSearchProbe)
         {
-            WindowsSearchLastWordHandler.Probe(operation, target, targetPid, focusedControl, focusedPid,
-                out string searchResult);
-            return End(operation, "Aborted", $"reason={searchResult}", timer);
+            bool replaced = WindowsSearchLastWordHandler.TryReplace(operation, target, targetPid, focusedControl,
+                focusedPid, out string searchResult);
+            return End(operation, replaced ? searchResult : "Aborted", $"reason={searchResult}", timer);
         }
         if (!supported)
             return End(operation, "Unsupported", $"reason=FocusedControlClassNotSupported className=\"{Escape(className)}\"", timer);
@@ -271,7 +271,8 @@ internal static class NativeEditLastWordService
     {
         string suffix = string.IsNullOrEmpty(details) ? string.Empty : " " + details;
         Log(operation, $"NATIVE LASTWORD END result={result}{suffix} durationMs={Milliseconds(timer)}");
-        return result == "Success" || result.StartsWith("UiaWholeValueReplaced", StringComparison.Ordinal);
+        return result == "Success" || result.StartsWith("UiaWholeValueReplaced", StringComparison.Ordinal) ||
+            result == "WindowsSearchSuccess" || result.StartsWith("WindowsSearchReplacementSucceeded", StringComparison.Ordinal);
     }
 
     private static string Milliseconds(Stopwatch timer) =>

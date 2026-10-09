@@ -13,6 +13,77 @@ internal static class WindowsSearchLastWordHandler
     private const int MaxDepth = 6;
     private const int MaxElements = 160;
     private const int BudgetMilliseconds = 400;
+    private const int MaximumLoggedTextCharacters = 512;
+
+    internal static bool TryReplace(TextReplacementOperation operation, IntPtr foregroundWindow,
+        uint foregroundProcessId, IntPtr focusedWindow, uint focusedProcessId, out string result)
+    {
+        result = "WindowsSearchNotDetected";
+        var total = Stopwatch.StartNew();
+        Log(operation, "WINDOWS SEARCH LASTWORD BEGIN");
+        try
+        {
+            var detection = Stopwatch.StartNew();
+            if (foregroundWindow != operation.TargetWindow || foregroundProcessId == 0 ||
+                focusedProcessId != foregroundProcessId)
+            { result = "WindowsSearchFocusChanged"; return false; }
+
+            AutomationElement focused = AutomationElement.FocusedElement;
+            AutomationElement? target = FindFocusedCandidate(focused,
+                FindCandidates(AutomationElement.FromHandle(foregroundWindow), foregroundProcessId), foregroundProcessId);
+            if (target == null) { result = "WindowsSearchEditNotFound"; return false; }
+            if (!IsConfirmedSearchTextBox(target, foregroundProcessId)) { result = "WindowsSearchNotDetected"; return false; }
+            if (!TryPattern(target, TextPattern.Pattern, out TextPattern? text) || text == null)
+            { result = "WindowsSearchTextUnavailable"; return false; }
+            Log(operation, $"DetectionMs={detection.ElapsedMilliseconds}");
+
+            var textRead = Stopwatch.StartNew();
+            string documentText = text.DocumentRange.GetText(-1);
+            LogText(operation, "DocumentText", documentText);
+            Log(operation, $"DocumentLength={documentText.Length} TextReadMs={textRead.ElapsedMilliseconds}");
+            var caretRead = Stopwatch.StartNew();
+            TextPatternRange[] ranges = text.GetSelection();
+            if (ranges.Length != 1) { result = "WindowsSearchCaretUnavailable"; return false; }
+            int selectionStart = Offset(text, ranges[0], TextPatternRangeEndpoint.Start);
+            int selectionEnd = Offset(text, ranges[0], TextPatternRangeEndpoint.End);
+            Log(operation, $"SelectionCount={ranges.Length} SelectionStart={selectionStart} SelectionEnd={selectionEnd}");
+            if (selectionStart != selectionEnd) { result = "WindowsSearchCaretUnavailable"; return false; }
+            int caret = selectionStart;
+            if (caret < 0 || caret > documentText.Length) { result = "WindowsSearchCaretUnavailable"; return false; }
+            Log(operation, $"CaretOffset={caret} CaretReadMs={caretRead.ElapsedMilliseconds}");
+
+            var wordDetection = Stopwatch.StartNew();
+            LastWordSelectionAnalysis analysis = LastWordSelectionAnalyzer.Analyze(documentText[..caret]);
+            if (!analysis.HasFragment) { result = "WindowsSearchWordNotFound"; return false; }
+            int wordStart = analysis.FragmentStart;
+            string fragment = documentText.Substring(wordStart, analysis.FragmentLength);
+            Log(operation, $"WordRangeStart={wordStart} WordRangeEnd={wordStart + analysis.FragmentLength}");
+            LogText(operation, "WordText", fragment);
+            Log(operation, $"WordDetectionMs={wordDetection.ElapsedMilliseconds}");
+            LastWordLayoutResolver.Apply(operation, fragment, wordStart, caret, out _);
+            string converted = LayoutConverter.Convert(fragment, operation.SourceMap, operation.TargetMap, out _);
+            Log(operation, $"ConversionSource={operation.SourceLayout.ShortName} ConversionTarget={operation.TargetLayout.ShortName}");
+            LogText(operation, "Converted", converted);
+            if (!UiaTargetedReplacement.TryBuildPlan(documentText, caret, converted, out int start,
+                    out int length, out string plannedFragment, out string expectedDocument, out int expectedCaret,
+                    out string planReason))
+            { result = MapPlanFailure(planReason); return false; }
+
+            bool replaced = UiaTargetedReplacement.TryReplace(operation, target, text, target.GetRuntimeId(),
+                documentText, start, length, plannedFragment, converted, expectedDocument, expectedCaret,
+                "WindowsSearch", "WindowsSearchSuccess", out string replacementResult);
+            result = MapReplacementResult(replacementResult);
+            if (replaced && result == "WindowsSearchSuccess")
+                Log(operation, "LayoutSwitchVerified=True");
+            return replaced;
+        }
+        catch (ElementNotAvailableException) { result = "WindowsSearchFocusChanged"; return false; }
+        catch (Exception ex) { result = "WindowsSearch" + ex.GetType().Name; return false; }
+        finally
+        {
+            Log(operation, $"WINDOWS SEARCH LASTWORD END result={result} TotalMs={total.ElapsedMilliseconds}");
+        }
+    }
 
     internal static bool Probe(TextReplacementOperation operation, IntPtr foregroundWindow, uint foregroundProcessId,
         IntPtr focusedWindow, uint focusedProcessId, out string result)
@@ -131,6 +202,56 @@ internal static class WindowsSearchLastWordHandler
         return null;
     }
 
+    private static bool IsConfirmedSearchTextBox(AutomationElement element, uint processId)
+    {
+        bool hasWritableValue = TryPattern(element, ValuePattern.Pattern, out ValuePattern? value) &&
+            value != null && !value.Current.IsReadOnly;
+        return IsSearchTextBoxIdentity(
+            Get(element, AutomationElement.ProcessIdProperty, 0) == (int)processId,
+            Get(element, AutomationElement.ControlTypeProperty, ControlType.Custom) == ControlType.Edit,
+            Get(element, AutomationElement.ClassNameProperty, string.Empty),
+            Get(element, AutomationElement.AutomationIdProperty, string.Empty),
+            Get(element, AutomationElement.FrameworkIdProperty, string.Empty),
+            Get(element, AutomationElement.HasKeyboardFocusProperty, false),
+            Get(element, AutomationElement.IsKeyboardFocusableProperty, false),
+            Get(element, AutomationElement.IsEnabledProperty, false),
+            Get(element, AutomationElement.IsOffscreenProperty, true), hasWritableValue);
+    }
+
+    internal static bool IsSearchTextBoxIdentity(bool sameProcess, bool isEdit, string className,
+        string automationId, string frameworkId, bool hasKeyboardFocus, bool keyboardFocusable,
+        bool enabled, bool offscreen, bool writable) =>
+        sameProcess && isEdit &&
+        string.Equals(className, "RichEditBox", StringComparison.Ordinal) &&
+        string.Equals(automationId, "SearchTextBox", StringComparison.Ordinal) &&
+        string.Equals(frameworkId, "XAML", StringComparison.Ordinal) &&
+        hasKeyboardFocus && keyboardFocusable && enabled && !offscreen && writable;
+
+    private static int Offset(TextPattern text, TextPatternRange range, TextPatternRangeEndpoint endpoint)
+    {
+        TextPatternRange prefix = text.DocumentRange.Clone();
+        prefix.MoveEndpointByRange(TextPatternRangeEndpoint.End, range, endpoint);
+        return prefix.GetText(-1).Length;
+    }
+
+    private static string MapPlanFailure(string reason) => reason switch
+    {
+        "NoFragmentBeforeCaret" => "WindowsSearchWordNotFound",
+        "CaretOutOfRange" => "WindowsSearchCaretUnavailable",
+        _ => "WindowsSearchReplacementFailed"
+    };
+
+    private static string MapReplacementResult(string result) => result switch
+    {
+        "WindowsSearchSuccess" => "WindowsSearchSuccess",
+        "TargetChangedBeforeTargetedReplacement" or "FocusChangedBeforeTargetedReplacement" => "WindowsSearchFocusChanged",
+        "TextChangedBeforeTargetedReplacement" => "WindowsSearchReplacementUnverified",
+        "TargetedSelectionVerificationFailed" or "TargetedSelectionTextMismatch" or "TargetedSelectionStartMoveFailed" or "TargetedSelectionEndMoveFailed" => "WindowsSearchSelectionUnverified",
+        "TargetedReplacementUnverified" => "WindowsSearchReplacementUnverified",
+        "TargetedReplacementSucceededLayoutSwitchFailed" => "WindowsSearchReplacementSucceededLayoutSwitchFailed",
+        _ => "WindowsSearchReplacementFailed"
+    };
+
     private static void LogElement(TextReplacementOperation operation, string label, AutomationElement element, int depth)
     {
         Log(operation, $"{label}: depth={depth} ControlType={Get(element, AutomationElement.ControlTypeProperty, ControlType.Custom).ProgrammaticName} ClassName=\"{Escape(Get(element, AutomationElement.ClassNameProperty, string.Empty))}\" AutomationId=\"{Escape(Get(element, AutomationElement.AutomationIdProperty, string.Empty))}\" Name=\"{Escape(Get(element, AutomationElement.NameProperty, string.Empty))}\" FrameworkId=\"{Escape(Get(element, AutomationElement.FrameworkIdProperty, string.Empty))}\" ProcessId={Get(element, AutomationElement.ProcessIdProperty, 0)} NativeWindowHandle=0x{Get(element, AutomationElement.NativeWindowHandleProperty, 0):X} HasKeyboardFocus={Get(element, AutomationElement.HasKeyboardFocusProperty, false)} IsKeyboardFocusable={Get(element, AutomationElement.IsKeyboardFocusableProperty, false)} IsEnabled={Get(element, AutomationElement.IsEnabledProperty, false)} IsOffscreen={Get(element, AutomationElement.IsOffscreenProperty, true)}");
@@ -141,6 +262,8 @@ internal static class WindowsSearchLastWordHandler
     private static T Get<T>(AutomationElement element, AutomationProperty property, T fallback)
     { try { object value = element.GetCurrentPropertyValue(property, true); return value is T typed ? typed : fallback; } catch { return fallback; } }
     private static string Escape(string value) => value.Replace("\\", "\\\\").Replace("\r", "\\r").Replace("\n", "\\n").Replace("\t", "\\t");
+    private static void LogText(TextReplacementOperation operation, string name, string value) =>
+        Log(operation, $"{name}=\"{Escape(value.Length <= MaximumLoggedTextCharacters ? value : value[..MaximumLoggedTextCharacters] + "…")}\" {name}Length={value.Length}");
     private static void Log(TextReplacementOperation operation, string message) => DiagnosticLogStore.Write($"operation={operation.Id:N} {message}");
 }
 

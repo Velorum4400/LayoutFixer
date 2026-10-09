@@ -36,38 +36,51 @@ internal static class UiaTargetedReplacement
     internal static bool TryReplace(TextReplacementOperation operation, AutomationElement element,
         TextPattern text, int[] runtimeId, string originalText, int start, int length,
         string fragment, string converted, string expectedText, int expectedCaret, out string result)
+        => TryReplace(operation, element, text, runtimeId, originalText, start, length, fragment, converted,
+            expectedText, expectedCaret, "Chromium", "ChromiumTargetedReplacementSucceeded", out result);
+
+    internal static bool TryReplace(TextReplacementOperation operation, AutomationElement element,
+        TextPattern text, int[] runtimeId, string originalText, int start, int length,
+        string fragment, string converted, string expectedText, int expectedCaret, string handlerName,
+        string successResult, out string result)
     {
         result = "TargetedReplacementFailed";
         var total = Stopwatch.StartNew();
-        Log(operation, "NATIVE LASTWORD: handler=Chromium strategy=TargetedReplacement BEGIN");
+        Log(operation, $"NATIVE LASTWORD: handler={handlerName} strategy=TargetedReplacement BEGIN");
         try
         {
             if (!Preflight(operation, element, runtimeId, text, originalText, out string preflightReason))
             { result = preflightReason; return false; }
-            if (!TrySelectExactRange(operation, text, start, length, fragment, out string selectionReason))
+            var selectionTimer = Stopwatch.StartNew();
+            if (!TrySelectExactRange(operation, text, start, length, fragment, handlerName, out string selectionReason))
             { result = selectionReason; return false; }
+            Log(operation, $"{handlerName} PERF SelectionMs={selectionTimer.ElapsedMilliseconds}");
             if (!Preflight(operation, element, runtimeId, text, originalText, out preflightReason))
             { result = preflightReason; return false; }
+            var replacementTimer = Stopwatch.StartNew();
             if (!KeyboardInputService.SendUnicodeText(converted))
             { result = "UnicodeInputFailed"; return false; }
+            Log(operation, $"{handlerName} PERF ReplacementMs={replacementTimer.ElapsedMilliseconds}");
 
-            if (!WaitForExpectedState(text, expectedText, expectedCaret, out bool caretPreserved))
+            var verificationTimer = Stopwatch.StartNew();
+            if (!WaitForExpectedState(operation, text, expectedText, expectedCaret, handlerName, out bool caretPreserved))
             { result = "TargetedReplacementUnverified"; return false; }
+            Log(operation, $"{handlerName} PERF VerificationMs={verificationTimer.ElapsedMilliseconds}");
 
             LastWordLayoutResolver.RecordVerifiedConversion(operation, fragment, converted, start, expectedCaret);
             LayoutSwitchVerificationResult switchResult = KeyboardLayoutService.SwitchLayoutAndVerify(
                 operation.TargetWindow, operation.TargetLayout, out _, out _);
             if (switchResult != LayoutSwitchVerificationResult.Success)
             { result = "TargetedReplacementSucceededLayoutSwitchFailed"; return true; }
-            Log(operation, $"NATIVE LASTWORD: handler=Chromium strategy=TargetedReplacement fragment=\"{Escape(fragment)}\" converted=\"{Escape(converted)}\" result=Success caretPreserved={caretPreserved}");
-            result = "ChromiumTargetedReplacementSucceeded";
+            Log(operation, $"NATIVE LASTWORD: handler={handlerName} strategy=TargetedReplacement fragment=\"{Escape(fragment)}\" converted=\"{Escape(converted)}\" result=Success caretPreserved={caretPreserved}");
+            result = successResult;
             return true;
         }
         catch (ElementNotAvailableException) { result = "ElementNotAvailable"; return false; }
         catch (Exception ex) { result = ex.GetType().Name; return false; }
         finally
         {
-            Log(operation, $"NATIVE LASTWORD: handler=Chromium strategy=TargetedReplacement END result={result} durationMs={total.ElapsedMilliseconds}");
+            Log(operation, $"NATIVE LASTWORD: handler={handlerName} strategy=TargetedReplacement END result={result} durationMs={total.ElapsedMilliseconds}");
         }
     }
 
@@ -83,7 +96,7 @@ internal static class UiaTargetedReplacement
     }
 
     private static bool TrySelectExactRange(TextReplacementOperation operation, TextPattern text, int start,
-        int length, string expected, out string reason)
+        int length, string expected, string handlerName, out string reason)
     {
         reason = "TargetedSelectionFailed";
         try
@@ -97,15 +110,23 @@ internal static class UiaTargetedReplacement
             if (!string.Equals(range.GetText(-1), expected, StringComparison.Ordinal))
             { reason = "TargetedSelectionTextMismatch"; return false; }
             range.Select();
+            Log(operation, $"{handlerName} SelectionMethod=TextPatternRange.Select SelectionAttempted=True ExpectedSelectionStart={start} ExpectedSelectionEnd={start + length} ExpectedSelectionText=\"{Escape(expected)}\"");
             var wait = Stopwatch.StartNew();
             while (wait.ElapsedMilliseconds <= VerificationTimeoutMilliseconds)
             {
                 TextPatternRange[] selection = text.GetSelection();
-                if (selection.Length == 1 &&
-                    Offset(text, selection[0], TextPatternRangeEndpoint.Start) == start &&
-                    Offset(text, selection[0], TextPatternRangeEndpoint.End) == start + length &&
-                    string.Equals(selection[0].GetText(-1), expected, StringComparison.Ordinal))
-                    return true;
+                if (selection.Length == 1)
+                {
+                    int actualStart = Offset(text, selection[0], TextPatternRangeEndpoint.Start);
+                    int actualEnd = Offset(text, selection[0], TextPatternRangeEndpoint.End);
+                    string actualText = selection[0].GetText(-1);
+                    if (actualStart == start && actualEnd == start + length &&
+                        string.Equals(actualText, expected, StringComparison.Ordinal))
+                    {
+                        Log(operation, $"{handlerName} ActualSelectionStart={actualStart} ActualSelectionEnd={actualEnd} ActualSelectionText=\"{Escape(actualText)}\" SelectionVerified=True");
+                        return true;
+                    }
+                }
                 Thread.Sleep(VerificationPollMilliseconds);
             }
             reason = "TargetedSelectionVerificationFailed";
@@ -114,8 +135,8 @@ internal static class UiaTargetedReplacement
         catch (Exception ex) { reason = "TargetedSelection" + ex.GetType().Name; return false; }
     }
 
-    private static bool WaitForExpectedState(TextPattern text, string expectedText, int expectedCaret,
-        out bool caretPreserved)
+    private static bool WaitForExpectedState(TextReplacementOperation operation, TextPattern text, string expectedText,
+        int expectedCaret, string handlerName, out bool caretPreserved)
     {
         caretPreserved = false;
         var wait = Stopwatch.StartNew();
@@ -129,6 +150,7 @@ internal static class UiaTargetedReplacement
                     caretPreserved = selection.Length == 1 &&
                         selection[0].CompareEndpoints(TextPatternRangeEndpoint.Start, selection[0], TextPatternRangeEndpoint.End) == 0 &&
                         Offset(text, selection[0], TextPatternRangeEndpoint.Start) == expectedCaret;
+                    Log(operation, $"{handlerName} ReplacementVerified=True CaretVerified={caretPreserved}");
                     return caretPreserved;
                 }
             }

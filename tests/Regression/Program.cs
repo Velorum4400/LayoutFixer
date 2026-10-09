@@ -489,6 +489,13 @@ Check(NativeEditLastWordService.ResolveHandler("Windows.UI.Core.CoreWindow", "Wi
       NativeEditLastWordService.ResolveHandler("Windows.UI.Core.CoreWindow", "Windows.UI.Core.CoreWindow", false, true, out _) ==
       NativeEditLastWordService.NativeHandler.Unsupported,
     "CoreWindow route is limited to same-process Windows Search UIA diagnostics");
+Check(WindowsSearchLastWordHandler.IsSearchTextBoxIdentity(true, true, "RichEditBox", "SearchTextBox",
+        "XAML", true, true, true, false, true) &&
+      !WindowsSearchLastWordHandler.IsSearchTextBoxIdentity(true, true, "RichEditBox", "OtherTextBox",
+        "XAML", true, true, true, false, true) &&
+      !WindowsSearchLastWordHandler.IsSearchTextBoxIdentity(true, true, "RichEditBox", "SearchTextBox",
+        "XAML", true, true, true, false, false),
+    "Windows Search handler requires the confirmed writable SearchTextBox identity");
 Check(NativeEditLastWordService.ResolveHandler("Notepad", "Edit", true, true, out _) == NativeEditLastWordService.NativeHandler.Edit &&
       NativeEditLastWordService.ResolveHandler("Notepad", "RichEditD2DPT", true, true, out _) == NativeEditLastWordService.NativeHandler.RichEdit,
     "native Edit and RichEdit routing remains unchanged");
