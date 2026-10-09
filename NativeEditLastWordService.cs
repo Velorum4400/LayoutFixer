@@ -35,16 +35,24 @@ internal static class NativeEditLastWordService
 
         uint focusedPid = 0;
         uint focusedTid = GetWindowThreadProcessId(focusedControl, out focusedPid);
+        string foregroundClass = GetWindowClassName(target);
         string className = GetWindowClassName(focusedControl);
-        NativeHandler handler = ResolveHandler(className);
+        bool sameProcess = focusedPid == targetPid;
+        bool focusedBelongsToForeground = sameProcess && BelongsToForeground(target, focusedControl);
+        NativeHandler handler = ResolveHandler(foregroundClass, className, sameProcess, focusedBelongsToForeground,
+            out string routingReason);
         bool supported = handler != NativeHandler.Unsupported;
         Log(operation, $"NativeLastWord foregroundWindow=0x{GetForegroundWindow().ToInt64():X}");
         Log(operation, $"NativeLastWord targetPid={targetPid} targetTid={targetTid}");
         Log(operation, $"NativeLastWord focusedControl=0x{focusedControl.ToInt64():X}");
         Log(operation, $"NativeLastWord focusedPid={focusedPid} focusedTid={focusedTid}");
-        Log(operation, $"NativeLastWord className=\"{Escape(className)}\"");
+        Log(operation, $"NativeLastWord foregroundClass=\"{Escape(foregroundClass)}\"");
+        Log(operation, $"NativeLastWord focusedClass=\"{Escape(className)}\"");
+        Log(operation, $"NativeLastWord sameProcess={sameProcess}");
+        Log(operation, $"NativeLastWord focusedBelongsToForeground={focusedBelongsToForeground}");
         Log(operation, $"NativeLastWord supported={supported}");
         Log(operation, $"NativeLastWord handler={handler}");
+        Log(operation, $"NativeLastWord routingReason={routingReason}");
         if (focusedControl == IntPtr.Zero || !IsWindow(focusedControl) || focusedPid != targetPid)
             return End(operation, "Failed", "stage=GetFocusedControl reason=FocusedControlDoesNotMatchTarget", timer);
         if (handler == NativeHandler.ChromiumProbe)
@@ -128,14 +136,27 @@ internal static class NativeEditLastWordService
         return focus != IntPtr.Zero;
     }
 
-    private static NativeHandler ResolveHandler(string className) => className switch
+    internal static NativeHandler ResolveHandler(string foregroundClass, string focusedClass, bool sameProcess,
+        bool focusedBelongsToForeground, out string reason)
     {
-        "Edit" => NativeHandler.Edit,
-        // Keep this explicit allow-list. Other class names need their own manual validation.
-        "RichEditD2DPT" => NativeHandler.RichEdit,
-        "Chrome_WidgetWin_1" => NativeHandler.ChromiumProbe,
-        _ => NativeHandler.Unsupported
-    };
+        if (focusedClass == "Edit") { reason = "NativeEditFocus"; return NativeHandler.Edit; }
+        if (focusedClass == "RichEditD2DPT") { reason = "NativeRichEditFocus"; return NativeHandler.RichEdit; }
+        bool chromiumForeground = foregroundClass == "Chrome_WidgetWin_1";
+        bool chromiumFocus = focusedClass is "Chrome_WidgetWin_1" or "Chrome_RenderWidgetHostHWND";
+        if (chromiumForeground && chromiumFocus && sameProcess && focusedBelongsToForeground)
+        {
+            reason = focusedClass == "Chrome_RenderWidgetHostHWND"
+                ? "ChromiumForegroundWithRenderWidgetFocus" : "ChromiumForegroundWithWidgetFocus";
+            return NativeHandler.ChromiumProbe;
+        }
+        reason = !sameProcess ? "FocusedWindowDifferentProcess" : !focusedBelongsToForeground ?
+            "FocusedWindowNotOwnedByForeground" : "FocusedControlClassNotSupported";
+        return NativeHandler.Unsupported;
+    }
+
+    private static bool BelongsToForeground(IntPtr foreground, IntPtr focused) =>
+        foreground != IntPtr.Zero && focused != IntPtr.Zero &&
+        (foreground == focused || IsChild(foreground, focused) || GetAncestor(focused, 2) == foreground);
 
     private static bool TryGetSelection(IntPtr edit, NativeHandler handler, out int start, out int end)
     {
@@ -252,7 +273,7 @@ internal static class NativeEditLastWordService
     private static void Log(TextReplacementOperation operation, string message) =>
         DiagnosticLogStore.Write($"operation={operation.Id:N} {message}");
 
-    private enum NativeHandler { Unsupported, Edit, RichEdit, ChromiumProbe }
+    internal enum NativeHandler { Unsupported, Edit, RichEdit, ChromiumProbe }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct GUITHREADINFO
@@ -265,6 +286,8 @@ internal static class NativeEditLastWordService
     [StructLayout(LayoutKind.Sequential)] private struct RECT { public int Left, Top, Right, Bottom; }
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr window);
+    [DllImport("user32.dll")] private static extern bool IsChild(IntPtr parent, IntPtr child);
+    [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr window, uint flags);
     [DllImport("user32.dll", SetLastError = true)] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
     [DllImport("user32.dll", SetLastError = true)] private static extern bool GetGUIThreadInfo(uint threadId, ref GUITHREADINFO info);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern int GetClassName(IntPtr window, StringBuilder className, int maxCount);
