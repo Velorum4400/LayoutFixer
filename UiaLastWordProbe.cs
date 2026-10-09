@@ -136,10 +136,10 @@ internal static class UiaLastWordProbe
             if (monaco && (documentText == null || caretFromSelection == null || caretOffset < 0 ||
                 !MonacoLastWordFallback.IsAccessibleDocumentText(documentText)))
             {
-                reason = "MonacoTextUnavailable";
-                Log(operation, "UiaLastWord handler=MonacoLastWordFallback result=MonacoTextUnavailable");
-                result = reason;
-                return false;
+                Log(operation, "UiaLastWord handler=MonacoKeyboardFallback reason=MonacoTextUnavailable");
+                bool keyboardSuccess = MonacoKeyboardFallback.TryReplace(operation, probeElement, out result);
+                reason = result;
+                return keyboardSuccess;
             }
             if (!monaco && (valueText == null || documentText == null || !string.Equals(valueText, documentText, StringComparison.Ordinal)))
             { reason = "ValueAndTextPatternMismatch"; Log(operation, $"UiaWholeValue textsEquivalent=False valueTextLength={valueText?.Length ?? -1} textPatternLength={documentText?.Length ?? -1}"); result = reason; return false; }
