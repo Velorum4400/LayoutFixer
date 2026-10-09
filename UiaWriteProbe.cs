@@ -54,8 +54,17 @@ internal static class UiaWriteProbe
             Log(operation, $"UiaWholeValue SetValue attempted=True elapsedMs={Ms(set)}");
             if (!WaitForValue(operation, runtimeId, replacement, out AutomationElement refreshed, out string stableReason))
             { result = "UiaWholeValueReplaced" + stableReason; return true; }
-            if (!RestoreCaret(operation, refreshed, runtimeId, replacement, expectedCaretOffset, out string caretReason))
-            { result = "UiaWholeValueReplacedCaretRestoreFailed"; Log(operation, $"UiaWholeValue caretRestoreFailureReason={caretReason}"); return true; }
+            bool caretRestored = RestoreCaret(operation, refreshed, runtimeId, replacement, expectedCaretOffset, out string caretReason);
+            if (!caretRestored) Log(operation, $"UiaWholeValue caretRestoreFailureReason={caretReason}");
+            bool switched = TrySwitchTargetLayout(operation, runtimeId, out string switchReason);
+            if (!switched)
+            {
+                result = "UiaWholeValueReplacedLayoutSwitchFailed";
+                Log(operation, $"UiaWholeValue layoutSwitchFailureReason={switchReason}");
+                return true;
+            }
+            if (!caretRestored)
+            { result = "UiaWholeValueReplacedCaretRestoreFailed"; return true; }
             Log(operation, "UiaWholeValue manualUndoTestRequired=True");
             Log(operation, "UiaWholeValue manualEditorStateTestRequired=True");
             result = "UiaWholeValueReplacedAndCaretRestored"; return true;
@@ -147,6 +156,27 @@ internal static class UiaWriteProbe
         catch (ElementNotAvailableException) { reason = "ElementNotAvailable"; Log(operation, "UiaWholeValue caretRestoreFailure=ElementNotAvailable"); return false; }
         catch (Exception ex) { reason = "CaretSelectFailed"; Log(operation, $"UiaWholeValue caretRestoreFailure={ex.GetType().Name}"); return false; }
         finally { Log(operation, $"UIA CARET RESTORE END result={(string.IsNullOrEmpty(reason) ? endResult : reason)} durationMs={Ms(timer)}"); }
+    }
+
+    private static bool TrySwitchTargetLayout(TextReplacementOperation operation, int[] runtimeId, out string reason)
+    {
+        var timer = Stopwatch.StartNew(); reason = string.Empty;
+        Log(operation, "LAYOUT SWITCH BEGIN");
+        try
+        {
+            bool foreground = TextReplacementService.ForegroundWindow == operation.TargetWindow;
+            bool focus = SameRuntimeId(AutomationElement.FocusedElement, runtimeId);
+            Log(operation, $"UiaWholeValue sourceLayout={operation.SourceLayout.ShortName} targetLayout={operation.TargetLayout.ShortName} targetWindow=0x{operation.TargetWindow.ToInt64():X} foregroundValid={foreground} focusValid={focus}");
+            if (!foreground) { reason = "TargetWindowChanged"; return false; }
+            if (!focus) { reason = "FocusChanged"; return false; }
+            LayoutSwitchVerificationResult switchResult = KeyboardLayoutService.SwitchLayoutAndVerify(operation.TargetWindow,
+                operation.TargetLayout, out IntPtr observed, out long elapsed);
+            bool success = switchResult == LayoutSwitchVerificationResult.Success;
+            Log(operation, $"UiaWholeValue requestAttempted=True requestAccepted={switchResult != LayoutSwitchVerificationResult.RequestFailed} postSwitchLayout=0x{observed.ToInt64():X} postSwitchMatchesTarget={success} switchElapsedMs={elapsed}");
+            reason = switchResult.ToString();
+            return success;
+        }
+        finally { Log(operation, $"LAYOUT SWITCH END result={(string.IsNullOrEmpty(reason) ? "Success" : reason)} durationMs={Ms(timer)}"); }
     }
 
     private static int GetCaretOffset(TextPattern text, out bool readable)
