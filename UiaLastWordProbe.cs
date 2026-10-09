@@ -67,6 +67,8 @@ internal static class UiaLastWordProbe
             bool hasSelectionItem = TryPattern(probeElement, SelectionItemPattern.Pattern, out SelectionItemPattern? selectionItem);
             Log(operation, $"UiaProbe patterns Value={hasValue} Text={hasText} Text2={hasText2} LegacyIAccessible={hasLegacy} Selection={hasSelection} SelectionItem={hasSelectionItem}");
             Log(operation, $"UiaProbe patternsElapsedMs={Ms(patternsTimer)}");
+            bool monaco = MonacoLastWordFallback.IsMonacoEditor(probeElement);
+            Log(operation, $"UiaLastWord MonacoDetected={monaco} selectedClass=\"{Escape(Get(probeElement, AutomationElement.ClassNameProperty, string.Empty))}\"");
 
             string? valueText = null;
             if (hasValue && valuePattern != null)
@@ -131,31 +133,40 @@ internal static class UiaLastWordProbe
             }
             if (!textReadable && !hasValue) { reason = traversal.Selected == null ? "NoEditableDescendantFound" : "SelectedElementDoesNotExposeTextPatterns"; result = reason; return false; }
             if (password) { reason = "PasswordField"; result = reason; return false; }
-            if (valueText == null || documentText == null || !string.Equals(valueText, documentText, StringComparison.Ordinal))
+            if (monaco && (documentText == null || caretFromSelection == null || caretOffset < 0 ||
+                !MonacoLastWordFallback.IsAccessibleDocumentText(documentText)))
+            {
+                reason = "MonacoTextUnavailable";
+                Log(operation, "UiaLastWord handler=MonacoLastWordFallback result=MonacoTextUnavailable");
+                result = reason;
+                return false;
+            }
+            if (!monaco && (valueText == null || documentText == null || !string.Equals(valueText, documentText, StringComparison.Ordinal)))
             { reason = "ValueAndTextPatternMismatch"; Log(operation, $"UiaWholeValue textsEquivalent=False valueTextLength={valueText?.Length ?? -1} textPatternLength={documentText?.Length ?? -1}"); result = reason; return false; }
-            Log(operation, $"UiaWholeValue textsEquivalent=True valueTextLength={valueText.Length} textPatternLength={documentText.Length}");
-            if (valueText.Length > UiaWriteProbe.MaximumValueLength) { reason = "ValueTooLargeForExperimentalWholeValueReplacement"; result = reason; return false; }
+            string fullText = monaco ? documentText! : valueText!;
+            if (!monaco) Log(operation, $"UiaWholeValue textsEquivalent=True valueTextLength={valueText!.Length} textPatternLength={documentText!.Length}");
+            if (fullText.Length > UiaWriteProbe.MaximumValueLength) { reason = "ValueTooLargeForExperimentalWholeValueReplacement"; result = reason; return false; }
             if (caretFromSelection == null || caretOffset < 0) { reason = "UnsupportedSelection"; result = reason; return false; }
-            LastWordSelectionAnalysis plannedAnalysis = LastWordSelectionAnalyzer.Analyze(valueText[..caretOffset]);
-            string sourceFragment = plannedAnalysis.HasFragment ? valueText.Substring(plannedAnalysis.FragmentStart, plannedAnalysis.FragmentLength) : string.Empty;
+            LastWordSelectionAnalysis plannedAnalysis = LastWordSelectionAnalyzer.Analyze(fullText[..caretOffset]);
+            string sourceFragment = plannedAnalysis.HasFragment ? fullText.Substring(plannedAnalysis.FragmentStart, plannedAnalysis.FragmentLength) : string.Empty;
             LastWordLayoutResolver.Apply(operation, sourceFragment, plannedAnalysis.FragmentStart, caretOffset, out _);
-            if (!UiaWriteProbe.TryBuildReplacement(valueText, caretOffset,
+            if (!UiaWriteProbe.TryBuildReplacement(fullText, caretOffset,
                     LayoutConverter.Convert(sourceFragment, operation.SourceMap, operation.TargetMap, out _),
                     out int start, out int end, out string plannedFragment, out string replacement, out int expectedCaret, out reason))
             { result = reason; return false; }
-            Log(operation, $"UiaWholeValue caretOffset={caretOffset} lastWordStart={start} lastWordEnd={end} oldLength={valueText.Length} newLength={replacement.Length} expectedCaretOffset={expectedCaret}");
+            Log(operation, $"UiaWholeValue caretOffset={caretOffset} lastWordStart={start} lastWordEnd={end} oldLength={fullText.Length} newLength={replacement.Length} expectedCaretOffset={expectedCaret}");
             LogText(operation, "UiaWholeValue fragment", plannedFragment);
             string plannedConverted = replacement.Substring(start, expectedCaret - start);
             LogText(operation, "UiaWholeValue converted", plannedConverted);
-            if (hasText && textPattern != null && MonacoLastWordFallback.IsMonacoEditor(probeElement))
+            if (monaco && hasText && textPattern != null)
             {
                 Log(operation, "UiaLastWord handler=MonacoLastWordFallback");
                 bool monacoSuccess = MonacoLastWordFallback.TryReplace(operation, probeElement, textPattern,
-                    valueText, replacement, start, plannedFragment.Length, expectedCaret, out result);
+                    fullText, replacement, start, plannedFragment.Length, expectedCaret, out result);
                 reason = result;
                 return monacoSuccess;
             }
-            bool success = UiaWriteProbe.TryReplace(operation, probeElement, probeElement.GetRuntimeId(), valueText, replacement,
+            bool success = UiaWriteProbe.TryReplace(operation, probeElement, probeElement.GetRuntimeId(), fullText, replacement,
                 plannedFragment, plannedConverted, start, expectedCaret, out result);
             reason = result;
             return success;
