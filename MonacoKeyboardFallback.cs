@@ -20,9 +20,13 @@ internal static class MonacoKeyboardFallback
             if (!ClipboardService.TryCaptureStable(out snapshot, out _, out _)) { result = "MonacoKeyboardClipboardSnapshotFailed"; return false; }
             if (!TryCopySelectedToken(operation, out string source)) return false;
             LastWordLayoutResolver.Apply(operation, source, 0, source.Length, out _);
-            string converted = LayoutConverter.Convert(source, operation.SourceMap, operation.TargetMap, out int unchanged);
+            string converted = LayoutConverter.Convert(source, operation.SourceMap, operation.TargetMap, out _);
             Log(operation, $"CopiedTextLength={source.Length} ConversionSource={operation.SourceLayout.ShortName} ConversionTarget={operation.TargetLayout.ShortName} ConvertedTextLength={converted.Length}");
-            if (unchanged == source.Length || string.Equals(source, converted, StringComparison.Ordinal)) { result = "ConversionUnchanged"; return false; }
+            if (LastWordLayoutOnlyCompletion.IsUnchanged(source, converted))
+            {
+                if (!KeyboardInputService.CollapseSelectionToEnd()) { result = "MonacoKeyboardCaretRestoreFailed"; return false; }
+                return LastWordLayoutOnlyCompletion.TryComplete(operation, "MonacoKeyboardFallback", out result);
+            }
             if (TextReplacementService.ForegroundWindow != operation.TargetWindow || !MonacoLastWordFallback.IsMonacoEditor(AutomationElement.FocusedElement)) { result = "MonacoKeyboardFocusChanged"; return false; }
             if (!ClipboardService.TrySetText(converted, out ourSequence)) { result = "MonacoKeyboardClipboardWriteFailed"; return false; }
             replacementStarted = true;

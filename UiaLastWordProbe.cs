@@ -151,6 +151,12 @@ internal static class UiaLastWordProbe
             string sourceFragment = plannedAnalysis.HasFragment ? fullText.Substring(plannedAnalysis.FragmentStart, plannedAnalysis.FragmentLength) : string.Empty;
             LastWordLayoutResolver.Apply(operation, sourceFragment, plannedAnalysis.FragmentStart, caretOffset, out _);
             string converted = LayoutConverter.Convert(sourceFragment, operation.SourceMap, operation.TargetMap, out _);
+            if (LastWordLayoutOnlyCompletion.IsUnchanged(sourceFragment, converted))
+            {
+                bool layoutOnly = LastWordLayoutOnlyCompletion.TryComplete(operation, "Chromium", out result);
+                reason = result;
+                return layoutOnly;
+            }
             if (!UiaTargetedReplacement.TryBuildPlan(fullText, caretOffset, converted,
                     out int start, out int length, out string plannedFragment, out string expectedText,
                     out int expectedCaret, out reason))

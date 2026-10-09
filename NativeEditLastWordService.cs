@@ -105,6 +105,12 @@ internal static class NativeEditLastWordService
         Log(operation, $"NativeLastWord fragment=\"{Escape(fragment)}\"");
         Log(operation, $"NativeLastWord converted=\"{Escape(converted)}\" unchanged={unchangedCount}");
 
+        if (LastWordLayoutOnlyCompletion.IsUnchanged(fragment, converted))
+        {
+            bool layoutOnly = LastWordLayoutOnlyCompletion.TryComplete(operation, handler.ToString(), out string layoutOnlyResult);
+            return End(operation, layoutOnly ? layoutOnlyResult : "Failed", $"reason={layoutOnlyResult}", timer);
+        }
+
         if (GetForegroundWindow() != target || !IsWindow(focusedControl) ||
             !TryGetFocusedControl(targetTid, out IntPtr currentFocus) || currentFocus != focusedControl)
             return End(operation, "Failed", "stage=PreReplaceCheck reason=TargetChanged", timer);
@@ -272,7 +278,8 @@ internal static class NativeEditLastWordService
         string suffix = string.IsNullOrEmpty(details) ? string.Empty : " " + details;
         Log(operation, $"NATIVE LASTWORD END result={result}{suffix} durationMs={Milliseconds(timer)}");
         return result == "Success" || result.StartsWith("UiaWholeValueReplaced", StringComparison.Ordinal) ||
-            result == "WindowsSearchSuccess" || result.StartsWith("WindowsSearchReplacementSucceeded", StringComparison.Ordinal);
+            result == "WindowsSearchSuccess" || result.StartsWith("WindowsSearchReplacementSucceeded", StringComparison.Ordinal) ||
+            result == "LayoutOnlySuccess";
     }
 
     private static string Milliseconds(Stopwatch timer) =>

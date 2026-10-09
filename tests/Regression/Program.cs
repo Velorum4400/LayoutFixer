@@ -57,6 +57,9 @@ if (english != null && hebrew != null)
     Check(LayoutConverter.Convert("Ghbdtn", Map(english), Map(hebrew), out _) == "G" + hebrewLower[1..] &&
           LayoutConverter.Convert("GHBDTN", Map(english), Map(hebrew), out _) == "GHBDTN",
         "English Shift state is preserved when converting to Hebrew");
+    Check(LastWordLayoutOnlyCompletion.IsUnchanged("GHBDTN",
+              LayoutConverter.Convert("GHBDTN", Map(english), Map(hebrew), out _)),
+        "unchanged English uppercase conversion is recognized for layout-only completion");
     if (russian != null)
     {
         string mixedHebrew = LayoutConverter.Convert("Ghbdtn", Map(english), Map(hebrew), out _);
@@ -82,6 +85,9 @@ if (english != null && russian != null && hebrew != null)
           LayoutConverter.Convert("/", Map(english), Map(hebrew), out _) == "." &&
           LayoutConverter.Convert(".", Map(hebrew), Map(russian), out _) == ".",
         "Hebrew period follows scan code 0x35 to Russian period");
+    Check(LayoutConverter.Convert("GHBDTN", Map(english), Map(russian), out _) == "ПРИВЕТ" &&
+          LayoutConverter.Convert("ПРИВЕТ", Map(russian), Map(english), out _) == "GHBDTN",
+        "uppercase Russian and English conversions still replace text");
     Check(LayoutConverter.Convert("😀\tunsupported\r\n", Map(english), Map(russian), out _) == "😀\tгтыгззщкеув\r\n",
         "unsupported Unicode and whitespace are preserved");
 }

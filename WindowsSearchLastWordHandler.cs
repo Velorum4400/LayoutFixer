@@ -64,6 +64,8 @@ internal static class WindowsSearchLastWordHandler
             string converted = LayoutConverter.Convert(fragment, operation.SourceMap, operation.TargetMap, out _);
             Log(operation, $"ConversionSource={operation.SourceLayout.ShortName} ConversionTarget={operation.TargetLayout.ShortName}");
             LogText(operation, "Converted", converted);
+            if (LastWordLayoutOnlyCompletion.IsUnchanged(fragment, converted))
+                return LastWordLayoutOnlyCompletion.TryComplete(operation, "WindowsSearch", out result);
             if (!UiaTargetedReplacement.TryBuildPlan(documentText, caret, converted, out int start,
                     out int length, out string plannedFragment, out string expectedDocument, out int expectedCaret,
                     out string planReason))
