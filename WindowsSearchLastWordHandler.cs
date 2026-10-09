@@ -245,6 +245,7 @@ internal static class WindowsSearchLastWordHandler
     {
         "WindowsSearchSuccess" => "WindowsSearchSuccess",
         "TargetChangedBeforeTargetedReplacement" or "FocusChangedBeforeTargetedReplacement" => "WindowsSearchFocusChanged",
+        "FocusChangedAfterTargetedReplacement" => "WindowsSearchFocusChanged",
         "TextChangedBeforeTargetedReplacement" => "WindowsSearchReplacementUnverified",
         "TargetedSelectionVerificationFailed" or "TargetedSelectionTextMismatch" or "TargetedSelectionStartMoveFailed" or "TargetedSelectionEndMoveFailed" => "WindowsSearchSelectionUnverified",
         "TargetedReplacementUnverified" => "WindowsSearchReplacementUnverified",

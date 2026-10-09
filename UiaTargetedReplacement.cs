@@ -63,8 +63,9 @@ internal static class UiaTargetedReplacement
             Log(operation, $"{handlerName} PERF ReplacementMs={replacementTimer.ElapsedMilliseconds}");
 
             var verificationTimer = Stopwatch.StartNew();
-            if (!WaitForExpectedState(operation, text, expectedText, expectedCaret, handlerName, out bool caretPreserved))
-            { result = "TargetedReplacementUnverified"; return false; }
+            if (!WaitForExpectedState(operation, element, runtimeId, text, expectedText, expectedCaret, handlerName,
+                    out bool caretPreserved, out bool focusChanged))
+            { result = focusChanged ? "FocusChangedAfterTargetedReplacement" : "TargetedReplacementUnverified"; return false; }
             Log(operation, $"{handlerName} PERF VerificationMs={verificationTimer.ElapsedMilliseconds}");
 
             LastWordLayoutResolver.RecordVerifiedConversion(operation, fragment, converted, start, expectedCaret);
@@ -135,15 +136,23 @@ internal static class UiaTargetedReplacement
         catch (Exception ex) { reason = "TargetedSelection" + ex.GetType().Name; return false; }
     }
 
-    private static bool WaitForExpectedState(TextReplacementOperation operation, TextPattern text, string expectedText,
-        int expectedCaret, string handlerName, out bool caretPreserved)
+    private static bool WaitForExpectedState(TextReplacementOperation operation, AutomationElement element,
+        int[] runtimeId, TextPattern text, string expectedText, int expectedCaret, string handlerName,
+        out bool caretPreserved, out bool focusChanged)
     {
         caretPreserved = false;
+        focusChanged = false;
         var wait = Stopwatch.StartNew();
         while (wait.ElapsedMilliseconds <= VerificationTimeoutMilliseconds)
         {
             try
             {
+                if (TextReplacementService.ForegroundWindow != operation.TargetWindow ||
+                    !SameRuntimeId(AutomationElement.FocusedElement, runtimeId))
+                {
+                    focusChanged = true;
+                    return false;
+                }
                 if (string.Equals(text.DocumentRange.GetText(-1), expectedText, StringComparison.Ordinal))
                 {
                     TextPatternRange[] selection = text.GetSelection();
