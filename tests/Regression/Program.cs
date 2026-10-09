@@ -482,6 +482,13 @@ Check(NativeEditLastWordService.ResolveHandler("Chrome_WidgetWin_1", "Unknown", 
       NativeEditLastWordService.ResolveHandler("Chrome_WidgetWin_1", "Chrome_RenderWidgetHostHWND", true, false, out _) ==
       NativeEditLastWordService.NativeHandler.Unsupported,
     "Chromium routing rejects unsupported, foreign, and unowned focus windows");
+Check(NativeEditLastWordService.ResolveHandler("Windows.UI.Core.CoreWindow", "Windows.UI.Core.CoreWindow", true, true, out _) ==
+      NativeEditLastWordService.NativeHandler.WindowsSearchProbe &&
+      NativeEditLastWordService.ResolveHandler("Windows.UI.Core.CoreWindow", "Other", true, true, out _) ==
+      NativeEditLastWordService.NativeHandler.Unsupported &&
+      NativeEditLastWordService.ResolveHandler("Windows.UI.Core.CoreWindow", "Windows.UI.Core.CoreWindow", false, true, out _) ==
+      NativeEditLastWordService.NativeHandler.Unsupported,
+    "CoreWindow route is limited to same-process Windows Search UIA diagnostics");
 Check(NativeEditLastWordService.ResolveHandler("Notepad", "Edit", true, true, out _) == NativeEditLastWordService.NativeHandler.Edit &&
       NativeEditLastWordService.ResolveHandler("Notepad", "RichEditD2DPT", true, true, out _) == NativeEditLastWordService.NativeHandler.RichEdit,
     "native Edit and RichEdit routing remains unchanged");

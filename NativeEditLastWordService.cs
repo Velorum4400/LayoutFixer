@@ -60,6 +60,12 @@ internal static class NativeEditLastWordService
             bool replaced = UiaLastWordProbe.Run(operation, out string uiaResult);
             return End(operation, replaced ? uiaResult : "Aborted", $"reason={uiaResult}", timer);
         }
+        if (handler == NativeHandler.WindowsSearchProbe)
+        {
+            WindowsSearchLastWordHandler.Probe(operation, target, targetPid, focusedControl, focusedPid,
+                out string searchResult);
+            return End(operation, "Aborted", $"reason={searchResult}", timer);
+        }
         if (!supported)
             return End(operation, "Unsupported", $"reason=FocusedControlClassNotSupported className=\"{Escape(className)}\"", timer);
 
@@ -150,6 +156,12 @@ internal static class NativeEditLastWordService
             reason = focusedClass == "Chrome_RenderWidgetHostHWND"
                 ? "ChromiumForegroundWithRenderWidgetFocus" : "ChromiumForegroundWithWidgetFocus";
             return NativeHandler.ChromiumProbe;
+        }
+        if (foregroundClass == "Windows.UI.Core.CoreWindow" &&
+            focusedClass == "Windows.UI.Core.CoreWindow" && sameProcess && focusedBelongsToForeground)
+        {
+            reason = "CoreWindowCandidateRequiresWindowsSearchUiaConfirmation";
+            return NativeHandler.WindowsSearchProbe;
         }
         reason = !sameProcess ? "FocusedWindowDifferentProcess" : !focusedBelongsToForeground ?
             "FocusedWindowNotOwnedByForeground" : "FocusedControlClassNotSupported";
@@ -275,7 +287,7 @@ internal static class NativeEditLastWordService
     private static void Log(TextReplacementOperation operation, string message) =>
         DiagnosticLogStore.Write($"operation={operation.Id:N} {message}");
 
-    internal enum NativeHandler { Unsupported, Edit, RichEdit, ChromiumProbe }
+    internal enum NativeHandler { Unsupported, Edit, RichEdit, ChromiumProbe, WindowsSearchProbe }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct GUITHREADINFO
