@@ -354,6 +354,10 @@ Check(NativeEditLastWordService.ResolveHandler("Chrome_WidgetWin_1", "Unknown", 
 Check(NativeEditLastWordService.ResolveHandler("Notepad", "Edit", true, true, out _) == NativeEditLastWordService.NativeHandler.Edit &&
       NativeEditLastWordService.ResolveHandler("Notepad", "RichEditD2DPT", true, true, out _) == NativeEditLastWordService.NativeHandler.RichEdit,
     "native Edit and RichEdit routing remains unchanged");
+Check(MonacoLastWordFallback.IsMonacoClassPair("native-edit-context", "monaco-editor focused") &&
+      !MonacoLastWordFallback.IsMonacoClassPair("native-edit-context", "ProseMirror") &&
+      !MonacoLastWordFallback.IsMonacoClassPair("other", "monaco-editor"),
+    "Monaco fallback requires native edit context and Monaco parent");
 
 Console.WriteLine($"{passed} regression checks passed.");
 
