@@ -320,6 +320,21 @@ Check(LastWordLayoutResolver.Detect("123-456") == FragmentLayoutDetection.Ambigu
 Check(LastWordLayoutResolver.Detect("teст") == FragmentLayoutDetection.Mixed &&
       LastWordLayoutResolver.Detect("тש") == FragmentLayoutDetection.Mixed,
     "mixed-script fragments remain mixed");
+Check(NativeEditLastWordService.ResolveHandler("Chrome_WidgetWin_1", "Chrome_WidgetWin_1", true, true, out _) ==
+      NativeEditLastWordService.NativeHandler.ChromiumProbe &&
+      NativeEditLastWordService.ResolveHandler("Chrome_WidgetWin_1", "Chrome_RenderWidgetHostHWND", true, true, out _) ==
+      NativeEditLastWordService.NativeHandler.ChromiumProbe,
+    "Chromium widget and render-widget focus route to UIA probe");
+Check(NativeEditLastWordService.ResolveHandler("Chrome_WidgetWin_1", "Unknown", true, true, out _) ==
+      NativeEditLastWordService.NativeHandler.Unsupported &&
+      NativeEditLastWordService.ResolveHandler("Chrome_WidgetWin_1", "Chrome_RenderWidgetHostHWND", false, true, out _) ==
+      NativeEditLastWordService.NativeHandler.Unsupported &&
+      NativeEditLastWordService.ResolveHandler("Chrome_WidgetWin_1", "Chrome_RenderWidgetHostHWND", true, false, out _) ==
+      NativeEditLastWordService.NativeHandler.Unsupported,
+    "Chromium routing rejects unsupported, foreign, and unowned focus windows");
+Check(NativeEditLastWordService.ResolveHandler("Notepad", "Edit", true, true, out _) == NativeEditLastWordService.NativeHandler.Edit &&
+      NativeEditLastWordService.ResolveHandler("Notepad", "RichEditD2DPT", true, true, out _) == NativeEditLastWordService.NativeHandler.RichEdit,
+    "native Edit and RichEdit routing remains unchanged");
 
 Console.WriteLine($"{passed} regression checks passed.");
 
