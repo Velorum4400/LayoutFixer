@@ -50,11 +50,19 @@ if (english != null && russian != null)
         "Shift punctuation conversion English to Russian");
 }
 if (english != null && hebrew != null)
+{
     Check(LayoutConverter.Convert("akuo", Map(english), Map(hebrew), out _) == "שלום",
         "physical key conversion English to Hebrew");
+    string hebrewLower = LayoutConverter.Convert("ghbdtn", Map(english), Map(hebrew), out _);
+    Check(LayoutConverter.Convert("Ghbdtn", Map(english), Map(hebrew), out _) == hebrewLower &&
+          LayoutConverter.Convert("GHBDTN", Map(english), Map(hebrew), out _) == hebrewLower,
+        "English uppercase maps to Hebrew physical keys without retaining Latin Shift output");
+}
 if (english != null && russian != null && hebrew != null)
 {
-    const string cycleSource = "Привет, я исправленный текст. Все ли прошло так, как надо? Были ли проблемы с чем-то?";
+    // A Hebrew layout has no case distinction; verify the lossless physical-key cycle
+    // with lowercase source separately from the explicit uppercase-to-Hebrew assertions.
+    const string cycleSource = "привет, я исправленный текст. все ли прошло так, как надо? были ли проблемы с чем-то?";
     string englishText = LayoutConverter.Convert(cycleSource, Map(russian), Map(english), out _);
     string hebrewText = LayoutConverter.Convert(englishText, Map(english), Map(hebrew), out _);
     string cycleResult = LayoutConverter.Convert(hebrewText, Map(hebrew), Map(russian), out _);
