@@ -33,7 +33,8 @@ internal static class UiaWriteProbe
     }
 
     internal static bool TryReplace(TextReplacementOperation operation, AutomationElement element,
-        int[] runtimeId, string originalValue, string replacement, int expectedCaretOffset, out string result)
+        int[] runtimeId, string originalValue, string replacement, string sourceFragment, string convertedFragment,
+        int fragmentStart, int expectedCaretOffset, out string result)
     {
         var timer = Stopwatch.StartNew(); result = "Aborted";
         Log(operation, "UIA VALUE REPLACEMENT BEGIN");
@@ -54,6 +55,8 @@ internal static class UiaWriteProbe
             Log(operation, $"UiaWholeValue SetValue attempted=True elapsedMs={Ms(set)}");
             if (!WaitForValue(operation, runtimeId, replacement, out AutomationElement refreshed, out string stableReason))
             { result = "UiaWholeValueReplaced" + stableReason; return true; }
+            LastWordLayoutResolver.RecordVerifiedConversion(operation, sourceFragment, convertedFragment,
+                fragmentStart, expectedCaretOffset);
             bool caretRestored = RestoreCaret(operation, refreshed, runtimeId, replacement, expectedCaretOffset, out string caretReason);
             if (!caretRestored) Log(operation, $"UiaWholeValue caretRestoreFailureReason={caretReason}");
             bool switched = TrySwitchTargetLayout(operation, runtimeId, out string switchReason);
