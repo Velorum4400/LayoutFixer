@@ -29,6 +29,13 @@ internal static class KeyboardInputService
     public static bool Paste() => SendChord(VK_CONTROL, VK_V);
     public static bool SelectPreviousWord(LastWordSearchDirection direction) =>
         SendChord(VK_CONTROL, VK_SHIFT, direction == LastWordSearchDirection.Left ? VK_LEFT : VK_RIGHT);
+    public static bool CollapseSelectionToEnd() => SendKey(VK_RIGHT);
+
+    private static bool SendKey(int key)
+    {
+        INPUT[] inputs = { CreateKey(key, false), CreateKey(key, true) };
+        return SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>()) == inputs.Length;
+    }
 
     private static bool SendChord(int modifier, int key)
     {
