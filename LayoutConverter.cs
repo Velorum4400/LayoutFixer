@@ -25,7 +25,7 @@ public static class LayoutConverter
 
             if (!source.TryGetPreferredCombinationAt(sourceText, index, out KeyCombination combination,
                     out int matchedLength) ||
-                !target.TryGetOutput(combination, out string? converted))
+                !TryConvertCombination(target, combination, sourceText.Substring(index, matchedLength), out string? converted))
             {
                 result.Append(character);
                 unchangedCount++;
@@ -36,6 +36,27 @@ public static class LayoutConverter
             index += matchedLength;
         }
         return result.ToString();
+    }
+
+    private static bool TryConvertCombination(KeyboardLayoutMap target, KeyCombination combination,
+        string sourceText, out string converted)
+    {
+        if (!target.TryGetOutput(combination, out converted!)) return false;
+        // Some layouts without letter case (notably Hebrew) expose a Latin character for
+        // Shift+letter. Preserve Shift for layouts which produce their own character, but
+        // retry the same physical key without Shift when the shifted result simply echoes
+        // the source character.
+        if ((target.Layout.LanguageId & 0x03ff) == 0x0d &&
+            (combination.Modifiers & KeyModifiers.Shift) != 0 &&
+            sourceText.Length == 1 && sourceText[0] is >= 'A' and <= 'Z' &&
+            string.Equals(converted, sourceText, StringComparison.Ordinal))
+        {
+            var unshifted = new KeyCombination(combination.ScanCode, combination.Modifiers & ~KeyModifiers.Shift);
+            if (target.TryGetOutput(unshifted, out string fallback) &&
+                !string.Equals(fallback, sourceText, StringComparison.Ordinal))
+                converted = fallback;
+        }
+        return true;
     }
 }
 
