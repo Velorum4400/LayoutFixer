@@ -35,7 +35,14 @@ internal static class MonacoLastWordFallback
         {
             Log(operation, "MonacoDetected=True ScreenReaderModeAccessible=True TextRead=True CaretRead=True LastWordRangeValid=True");
             if (TextReplacementService.ForegroundWindow != operation.TargetWindow) { result = "MonacoFocusChanged"; return false; }
-            if (!TrySelect(text, start, length, out string selectionReason)) { result = selectionReason; return false; }
+            string expectedSelection = originalText.Substring(start, length);
+            if (!TrySelect(operation, text, start, length, expectedSelection, out string selectionReason))
+            {
+                bool restored = RestoreCaret(text, start + length);
+                Log(operation, $"Monaco selection cleanup caretRestored={restored}");
+                result = selectionReason;
+                return false;
+            }
             Log(operation, "SelectionAttempted=True SelectionVerified=True");
             if (!ClipboardService.TryCaptureStable(out snapshot, out _, out _)) { result = "MonacoClipboardCaptureFailed"; return false; }
             if (!ClipboardService.TrySetText(replacement.Substring(start, expectedCaret - start), out pasteSequence)) { result = "MonacoClipboardWriteFailed"; return false; }
@@ -59,22 +66,38 @@ internal static class MonacoLastWordFallback
         }
     }
 
-    private static bool TrySelect(TextPattern text, int start, int length, out string reason)
+    private static bool TrySelect(TextReplacementOperation operation, TextPattern text, int start, int length,
+        string expectedText, out string reason)
     {
         reason = "MonacoSelectionFailed";
         try
         {
             TextPatternRange doc = text.DocumentRange, range = doc.Clone();
+            Log(operation, $"MONACO SELECTION BEGIN expectedStart={start} expectedEnd={start + length} expectedTextLength={expectedText.Length} caretOffsetBefore={start + length}");
             range.MoveEndpointByRange(TextPatternRangeEndpoint.End, doc, TextPatternRangeEndpoint.Start);
             if (range.CompareEndpoints(TextPatternRangeEndpoint.Start, range, TextPatternRangeEndpoint.End) != 0) return false;
             if (range.Move(TextUnit.Character, start) != start) return false;
             if (range.MoveEndpointByUnit(TextPatternRangeEndpoint.End, TextUnit.Character, length) != length) return false;
             range.Select();
-            TextPatternRange[] selection = text.GetSelection();
-            if (selection.Length != 1 || selection[0].GetText(-1).Length != length) { reason = "MonacoSelectionVerificationFailed"; return false; }
-            return true;
+            Log(operation, "Monaco selectAttempted=True selectException=None");
+            var wait = Stopwatch.StartNew();
+            for (int attempt = 1; wait.ElapsedMilliseconds <= 100; attempt++)
+            {
+                TextPatternRange[] selection = text.GetSelection();
+                int count = selection.Length, actualStart = -1, actualEnd = -1;
+                string actualText = count == 1 ? selection[0].GetText(-1) : string.Empty;
+                bool degenerate = count == 1 && selection[0].CompareEndpoints(TextPatternRangeEndpoint.Start, selection[0], TextPatternRangeEndpoint.End) == 0;
+                if (count == 1) { actualStart = GetOffset(text, selection[0], TextPatternRangeEndpoint.Start); actualEnd = GetOffset(text, selection[0], TextPatternRangeEndpoint.End); }
+                bool match = count == 1 && !degenerate && actualStart == start && actualEnd == start + length && string.Equals(actualText, expectedText, StringComparison.Ordinal);
+                Log(operation, $"Monaco selectionPoll attempt={attempt} selectionCount={count} selectionIsDegenerate={degenerate} actualSelectedLength={actualText.Length} actualStart={actualStart} actualEnd={actualEnd} selectionMatchesExpected={match}");
+                if (match) { Log(operation, "MONACO SELECTION END result=Success"); return true; }
+                Thread.Sleep(5);
+            }
+            reason = "MonacoSelectionVerificationFailed";
+            Log(operation, "MONACO SELECTION END result=MonacoSelectionVerificationFailed");
+            return false;
         }
-        catch { return false; }
+        catch (Exception ex) { Log(operation, $"Monaco selectAttempted=True selectException={ex.GetType().Name}"); return false; }
     }
 
     private static bool WaitForText(TextPattern text, string expected)
@@ -99,6 +122,26 @@ internal static class MonacoLastWordFallback
             return prefix.GetText(-1).Length == expected;
         }
         catch { return false; }
+    }
+
+    private static bool RestoreCaret(TextPattern text, int offset)
+    {
+        try
+        {
+            TextPatternRange document = text.DocumentRange, caret = document.Clone();
+            caret.MoveEndpointByRange(TextPatternRangeEndpoint.End, document, TextPatternRangeEndpoint.Start);
+            if (caret.Move(TextUnit.Character, offset) != offset) return false;
+            caret.Select();
+            return VerifyCaret(text, offset);
+        }
+        catch { return false; }
+    }
+
+    private static int GetOffset(TextPattern text, TextPatternRange range, TextPatternRangeEndpoint endpoint)
+    {
+        TextPatternRange prefix = text.DocumentRange.Clone();
+        prefix.MoveEndpointByRange(TextPatternRangeEndpoint.End, range, endpoint);
+        return prefix.GetText(-1).Length;
     }
 
     private static void Log(TextReplacementOperation operation, string message) =>
