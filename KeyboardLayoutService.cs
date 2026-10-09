@@ -15,6 +15,7 @@ public sealed record LayoutResolutionDiagnostic(IntPtr TargetWindow, uint Target
 public sealed record GuiInputContextDiagnostic(IntPtr FocusWindow, uint FocusProcessId,
     uint FocusThreadId, IntPtr FocusThreadLayout, IntPtr CaretWindow, uint CaretProcessId,
     uint CaretThreadId, IntPtr CaretThreadLayout, bool QuerySucceeded);
+public enum LayoutSwitchVerificationResult { Success, TargetWindowChanged, RequestFailed, VerificationFailed, Timeout }
 
 public static class KeyboardLayoutService
 {
@@ -204,6 +205,28 @@ public static class KeyboardLayoutService
         return sent;
     }
 
+    public static LayoutSwitchVerificationResult SwitchLayoutAndVerify(IntPtr targetWindow, KeyboardLayoutInfo target,
+        out IntPtr observedLayout, out long elapsedMilliseconds)
+    {
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        observedLayout = IntPtr.Zero;
+        if (targetWindow == IntPtr.Zero || GetForegroundWindow() != targetWindow || !IsWindow(targetWindow))
+        { elapsedMilliseconds = stopwatch.ElapsedMilliseconds; return LayoutSwitchVerificationResult.TargetWindowChanged; }
+        if (!SwitchLayout(targetWindow, target))
+        { elapsedMilliseconds = stopwatch.ElapsedMilliseconds; return LayoutSwitchVerificationResult.RequestFailed; }
+        while (stopwatch.ElapsedMilliseconds <= 120)
+        {
+            if (GetForegroundWindow() != targetWindow || !IsWindow(targetWindow))
+            { elapsedMilliseconds = stopwatch.ElapsedMilliseconds; return LayoutSwitchVerificationResult.TargetWindowChanged; }
+            observedLayout = GetLayoutForWindow(targetWindow);
+            if (observedLayout == target.Handle)
+            { elapsedMilliseconds = stopwatch.ElapsedMilliseconds; return LayoutSwitchVerificationResult.Success; }
+            Thread.Sleep(5);
+        }
+        elapsedMilliseconds = stopwatch.ElapsedMilliseconds;
+        return observedLayout == IntPtr.Zero ? LayoutSwitchVerificationResult.VerificationFailed : LayoutSwitchVerificationResult.Timeout;
+    }
+
     private static int FindLayout(IReadOnlyList<KeyboardLayoutInfo> layouts, IntPtr handle)
     {
         for (int i = 0; i < layouts.Count; i++)
@@ -264,6 +287,8 @@ public static class KeyboardLayoutService
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr window);
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetGUIThreadInfo(uint idThread, ref GUITHREADINFO info);
