@@ -21,6 +21,11 @@ internal static class MonacoLastWordFallback
         string.Equals(elementClass, "native-edit-context", StringComparison.Ordinal) &&
         parentClass?.Contains("monaco-editor", StringComparison.OrdinalIgnoreCase) == true;
 
+    internal static bool IsAccessibleDocumentText(string text) =>
+        !text.Contains("screen reader", StringComparison.OrdinalIgnoreCase) &&
+        !text.Contains("accessibility support", StringComparison.OrdinalIgnoreCase) &&
+        !text.Contains("not available", StringComparison.OrdinalIgnoreCase);
+
     internal static bool TryReplace(TextReplacementOperation operation, AutomationElement element, TextPattern text,
         string originalText, string replacement, int start, int length, int expectedCaret, out string result)
     {
