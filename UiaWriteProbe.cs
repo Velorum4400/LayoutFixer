@@ -95,31 +95,37 @@ internal static class UiaWriteProbe
     private static bool RestoreCaret(TextReplacementOperation operation, AutomationElement element, int[] runtimeId,
         string expectedValue, int expectedOffset, out string reason)
     {
-        var timer = Stopwatch.StartNew(); reason = string.Empty;
+        var timer = Stopwatch.StartNew(); reason = string.Empty; string endResult = "Failed";
         Log(operation, "UIA CARET RESTORE BEGIN");
         try
         {
             if (!TryPattern(element, TextPattern.Pattern, out TextPattern? text) || text == null) { reason = "NoTextPattern"; return false; }
-            string documentText = text.DocumentRange.GetText(-1);
+            TextPatternRange document = text.DocumentRange;
+            string documentText = document.GetText(-1);
             Log(operation, $"UiaWholeValue postWriteTextPatternRefreshed=True documentLength={documentText.Length}");
             if (expectedOffset < 0 || expectedOffset > documentText.Length) { reason = "ExpectedCaretOutOfRange"; return false; }
             int natural = GetCaretOffset(text, out bool naturalReadable);
             bool needed = !naturalReadable || natural != expectedOffset;
             Log(operation, $"UiaWholeValue expectedCaretOffset={expectedOffset} naturalCaretOffset={natural} naturalCaretMatchesExpected={(naturalReadable && natural == expectedOffset)} caretRestoreNeeded={needed}");
-            if (!needed) return true;
-            TextPatternRange candidate = text.DocumentRange.Clone();
+            if (!needed) { endResult = "AlreadyCorrect"; return true; }
+            var buildTimer = Stopwatch.StartNew();
+            // Keep the source DocumentRange distinct from the mutable clone. Chromium's
+            // provider did not reliably collapse a range when it was also the source.
+            TextPatternRange candidate = document.Clone();
             bool initialDegenerate = candidate.CompareEndpoints(TextPatternRangeEndpoint.Start, candidate, TextPatternRangeEndpoint.End) == 0;
             Log(operation, $"UiaWholeValue CaretRange initialDegenerate={initialDegenerate}");
-            candidate.MoveEndpointByRange(TextPatternRangeEndpoint.End, candidate, TextPatternRangeEndpoint.Start);
+            candidate.MoveEndpointByRange(TextPatternRangeEndpoint.End, document, TextPatternRangeEndpoint.Start);
             bool collapsed = candidate.CompareEndpoints(TextPatternRangeEndpoint.Start, candidate, TextPatternRangeEndpoint.End) == 0;
             int collapsedOffset = GetOffset(text, candidate);
             Log(operation, $"UiaWholeValue CaretRange collapseToStart success={collapsed} afterCollapseOffset={collapsedOffset}");
             if (!collapsed || collapsedOffset != 0) { reason = "CaretRangeCollapseFailed"; return false; }
             int moved = candidate.Move(TextUnit.Character, expectedOffset);
             Log(operation, $"UiaWholeValue CaretRange moveRequested={expectedOffset} moveActual={moved}");
+            if (moved != expectedOffset) { reason = "CaretRangeMoveFailed"; return false; }
             int resolved = GetOffset(text, candidate);
             bool degenerate = candidate.CompareEndpoints(TextPatternRangeEndpoint.Start, candidate, TextPatternRangeEndpoint.End) == 0;
             Log(operation, $"UiaWholeValue CaretRange finalDegenerate={degenerate} finalResolvedOffset={resolved}");
+            Log(operation, $"UiaWholeValue CaretRange buildElapsedMs={Ms(buildTimer)}");
             if (!degenerate || resolved != expectedOffset) { reason = "CaretRangeResolutionMismatch"; return false; }
             bool foreground = TextReplacementService.ForegroundWindow == operation.TargetWindow;
             bool focus = SameRuntimeId(AutomationElement.FocusedElement, runtimeId);
@@ -129,16 +135,18 @@ internal static class UiaWriteProbe
             if (!foreground || !focus) { reason = "FocusLost"; return false; }
             if (!unchanged) { reason = "TextChangedBeforeCaretRestore"; return false; }
             var select = Stopwatch.StartNew(); candidate.Select();
-            Log(operation, $"UiaWholeValue CaretRestore Select attempted=True elapsedMs={Ms(select)}");
+            Log(operation, $"UiaWholeValue CaretSelect attempted=True succeeded=True elapsedMs={Ms(select)}");
             if (!TryPattern(element, TextPattern.Pattern, out TextPattern? after) || after == null) { reason = "NoTextPatternAfterSelect"; return false; }
+            var verifyTimer = Stopwatch.StartNew();
             int actual = GetCaretOffset(after, out bool readable);
             bool match = readable && actual == expectedOffset;
-            Log(operation, $"UiaWholeValue postRestoreCaretOffset={actual} caretRestoreMatch={match}");
-            if (!match) { reason = "UnexpectedCaretOffset"; return false; }
-            return true;
+            Log(operation, $"UiaWholeValue postRestoreCaretOffset={actual} caretRestoreMatch={match} verificationElapsedMs={Ms(verifyTimer)}");
+            if (!match) { reason = "CaretPostSelectVerificationFailed"; return false; }
+            endResult = "Success"; return true;
         }
-        catch (Exception ex) { reason = ex.GetType().Name == "ElementNotAvailableException" ? "StaleElement" : "SelectThrewException"; Log(operation, $"UiaWholeValue caretRestoreFailure={ex.GetType().Name}"); return false; }
-        finally { Log(operation, $"UIA CARET RESTORE END durationMs={Ms(timer)}"); }
+        catch (ElementNotAvailableException) { reason = "ElementNotAvailable"; Log(operation, "UiaWholeValue caretRestoreFailure=ElementNotAvailable"); return false; }
+        catch (Exception ex) { reason = "CaretSelectFailed"; Log(operation, $"UiaWholeValue caretRestoreFailure={ex.GetType().Name}"); return false; }
+        finally { Log(operation, $"UIA CARET RESTORE END result={(string.IsNullOrEmpty(reason) ? endResult : reason)} durationMs={Ms(timer)}"); }
     }
 
     private static int GetCaretOffset(TextPattern text, out bool readable)
