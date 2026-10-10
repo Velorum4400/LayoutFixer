@@ -431,6 +431,7 @@ internal static class WindowsSearchLastWordHandler
             LogRangeAttributes(operation, "CandidateSuffix", CreateRange(text, caret, suffixEnd - caret));
             if (selectionStart != selectionEnd)
                 LogRangeAttributes(operation, "Selection", CreateRange(text, selectionStart, selectionEnd - selectionStart));
+            LogAutocompleteChildren(operation, target);
         }
         catch (Exception ex)
         {
@@ -477,6 +478,25 @@ internal static class WindowsSearchLastWordHandler
             }
         }
         Log(operation, $"AutocompleteSnapshot {rangeName}Attributes=[{string.Join(", ", values)}]");
+    }
+
+    private static void LogAutocompleteChildren(TextReplacementOperation operation, AutomationElement target)
+    {
+        try
+        {
+            var children = new List<string>();
+            AutomationElement? child = TreeWalker.RawViewWalker.GetFirstChild(target);
+            while (child != null && children.Count < 12)
+            {
+                children.Add($"ControlType={Get(child, AutomationElement.ControlTypeProperty, ControlType.Custom).ProgrammaticName};Class={Escape(Get(child, AutomationElement.ClassNameProperty, string.Empty))};AutomationId={Escape(Get(child, AutomationElement.AutomationIdProperty, string.Empty))};Name={Escape(Get(child, AutomationElement.NameProperty, string.Empty))}");
+                child = TreeWalker.RawViewWalker.GetNextSibling(child);
+            }
+            Log(operation, $"AutocompleteSnapshot DirectChildrenCount={children.Count} DirectChildren=[{string.Join(" | ", children)}]");
+        }
+        catch (Exception ex)
+        {
+            Log(operation, $"AutocompleteSnapshot DirectChildrenUnavailable={ex.GetType().Name}");
+        }
     }
 
     private static string FormatAttributeValue(object value)
