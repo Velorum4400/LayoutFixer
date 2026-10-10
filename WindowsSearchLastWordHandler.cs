@@ -70,6 +70,13 @@ internal static class WindowsSearchLastWordHandler
             string autocompleteReason = selectionStart == selectionEnd ? "SelectionIsDegenerate" : string.Empty;
             bool autocomplete = selectionStart != selectionEnd && TryDetectAutocomplete(documentText,
                 selectionStart, selectionEnd, out typedStart, out suggestedEnd, out autocompleteReason);
+            if (!autocomplete && selectionStart == selectionEnd)
+            {
+                bool hasValue = TryPattern(target, ValuePattern.Pattern, out ValuePattern? value) && value != null;
+                string valueText = hasValue ? value!.Current.Value ?? string.Empty : string.Empty;
+                autocomplete = TryDetectValuePatternAutocomplete(documentText, valueText, caret,
+                    out typedStart, out suggestedEnd, out autocompleteReason);
+            }
             Log(operation, $"AutocompleteDetected={autocomplete}");
             Log(operation, $"AutocompleteDetectionReason={autocompleteReason}");
 
@@ -326,6 +333,51 @@ internal static class WindowsSearchLastWordHandler
         while (typedStart > 0 && !char.IsWhiteSpace(text[typedStart - 1])) typedStart--;
         suggestedEnd = selectionEnd;
         reason = "SelectedSuffixFromCaretToWordBoundary";
+        return true;
+    }
+
+    internal static bool TryDetectValuePatternAutocomplete(string documentText, string valueText, int caret,
+        out int typedStart, out int suggestedEnd, out string reason)
+    {
+        typedStart = suggestedEnd = 0;
+        reason = "ValuePatternUnavailableOrEmpty";
+        if (string.IsNullOrEmpty(valueText)) return false;
+        if (documentText.Length <= valueText.Length)
+        {
+            reason = "DocumentNotLongerThanValue";
+            return false;
+        }
+        if (!documentText.StartsWith(valueText, StringComparison.Ordinal))
+        {
+            reason = "ValueIsNotDocumentPrefix";
+            return false;
+        }
+        if (caret != valueText.Length)
+        {
+            reason = "CaretDoesNotMatchValueLength";
+            return false;
+        }
+        if (caret == 0 || char.IsWhiteSpace(documentText[caret - 1]))
+        {
+            reason = "ValueDoesNotEndInsideWord";
+            return false;
+        }
+        int suffixEnd = caret;
+        while (suffixEnd < documentText.Length && !char.IsWhiteSpace(documentText[suffixEnd])) suffixEnd++;
+        if (suffixEnd == caret)
+        {
+            reason = "NoSuggestedSuffix";
+            return false;
+        }
+        if (suffixEnd != documentText.Length)
+        {
+            reason = "SuggestedSuffixDoesNotReachDocumentEnd";
+            return false;
+        }
+        typedStart = caret;
+        while (typedStart > 0 && !char.IsWhiteSpace(documentText[typedStart - 1])) typedStart--;
+        suggestedEnd = suffixEnd;
+        reason = "ValuePatternPrefixMismatch";
         return true;
     }
 

@@ -217,6 +217,23 @@ Check(!WindowsSearchLastWordHandler.TryDetectAutocomplete("notepad", 4, 6, out _
 Check(!WindowsSearchLastWordHandler.TryDetectAutocomplete("note pad", 4, 8, out _, out _,
         out string whitespaceSuggestionReason) && whitespaceSuggestionReason == "SelectedSuffixContainsWhitespace",
     "Windows Search rejects a whitespace-containing selection as autocomplete");
+Check(WindowsSearchLastWordHandler.TryDetectValuePatternAutocomplete("notepad", "note", 4,
+        out int valueTypedStart, out int valueSuggestedEnd, out string valueAutocompleteReason) &&
+      valueTypedStart == 0 && valueSuggestedEnd == 7 &&
+      valueAutocompleteReason == "ValuePatternPrefixMismatch",
+    "Windows Search recognizes autocomplete from ValuePattern prefix mismatch");
+Check(!WindowsSearchLastWordHandler.TryDetectValuePatternAutocomplete("notepad", "notepad", 4,
+        out _, out _, out string fullValueReason) && fullValueReason == "DocumentNotLongerThanValue",
+    "Windows Search keeps a fully typed word out of ValuePattern autocomplete handling");
+Check(!WindowsSearchLastWordHandler.TryDetectValuePatternAutocomplete("note", "note", 4,
+        out _, out _, out string equalValueReason) && equalValueReason == "DocumentNotLongerThanValue",
+    "Windows Search keeps an ordinary complete word out of ValuePattern autocomplete handling");
+Check(!WindowsSearchLastWordHandler.TryDetectValuePatternAutocomplete("notepad", "test", 4,
+        out _, out _, out string nonPrefixReason) && nonPrefixReason == "ValueIsNotDocumentPrefix",
+    "Windows Search rejects a ValuePattern mismatch without a shared prefix");
+Check(!WindowsSearchLastWordHandler.TryDetectValuePatternAutocomplete("notepad more", "note", 4,
+        out _, out _, out string spacedValueReason) && spacedValueReason == "SuggestedSuffixDoesNotReachDocumentEnd",
+    "Windows Search rejects a ValuePattern suffix followed by whitespace");
 const int WmKeyDown = 0x0100;
 const int WmKeyUp = 0x0101;
 const int WmSysKeyDown = 0x0104;
