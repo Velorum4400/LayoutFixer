@@ -47,7 +47,8 @@ internal static class WindowsSearchLastWordHandler
             int selectionStart = Offset(text, ranges[0], TextPatternRangeEndpoint.Start);
             int selectionEnd = Offset(text, ranges[0], TextPatternRangeEndpoint.End);
             Log(operation, $"SelectionCount={ranges.Length} SelectionStart={selectionStart} SelectionEnd={selectionEnd}");
-            if (selectionStart != selectionEnd) { result = "WindowsSearchCaretUnavailable"; return false; }
+            if (selectionStart < 0 || selectionEnd < selectionStart || selectionEnd > documentText.Length)
+            { result = "WindowsSearchCaretUnavailable"; return false; }
             int caret = selectionStart;
             if (caret < 0 || caret > documentText.Length) { result = "WindowsSearchCaretUnavailable"; return false; }
             Log(operation, $"CaretOffset={caret} CaretReadMs={caretRead.ElapsedMilliseconds}");
@@ -62,28 +63,71 @@ internal static class WindowsSearchLastWordHandler
             Log(operation, preceding.HasFragment
                 ? $"WordRangeBefore={preceding.FragmentStart}-{preceding.FragmentStart + preceding.FragmentLength}"
                 : "WordRangeBefore=none");
-            if (!TryResolveWordRange(documentText, caret, direction, out int wordStart, out int wordLength,
-                    out string rangeReason))
-            { result = "WindowsSearchWordNotFound"; return false; }
-            string fragment = documentText.Substring(wordStart, wordLength);
+            int typedStart = 0;
+            int suggestedEnd = 0;
+            string autocompleteReason = selectionStart == selectionEnd ? "SelectionIsDegenerate" : string.Empty;
+            bool autocomplete = selectionStart != selectionEnd && TryDetectAutocomplete(documentText,
+                selectionStart, selectionEnd, out typedStart, out suggestedEnd, out autocompleteReason);
+            Log(operation, $"AutocompleteDetected={autocomplete}");
+            Log(operation, $"AutocompleteDetectionReason={autocompleteReason}");
+
+            int wordStart;
+            int wordLength;
+            int replacementStart;
+            int replacementLength;
+            string rangeReason;
+            string typedText;
+            string suggestedSuffix;
+            if (autocomplete)
+            {
+                wordStart = typedStart;
+                wordLength = caret - typedStart;
+                replacementStart = typedStart;
+                replacementLength = suggestedEnd - typedStart;
+                rangeReason = "AutocompleteTypedPrefix";
+                typedText = documentText.Substring(wordStart, wordLength);
+                suggestedSuffix = documentText.Substring(caret, suggestedEnd - caret);
+            }
+            else
+            {
+                if (selectionStart != selectionEnd)
+                {
+                    result = "WindowsSearchNonAutocompleteSelection";
+                    return false;
+                }
+                if (!TryResolveWordRange(documentText, caret, direction, out wordStart, out wordLength,
+                        out rangeReason))
+                { result = "WindowsSearchWordNotFound"; return false; }
+                replacementStart = wordStart;
+                replacementLength = wordLength;
+                typedText = documentText.Substring(wordStart, wordLength);
+                suggestedSuffix = string.Empty;
+            }
             Log(operation, $"WordRangeAfter={wordStart}-{wordStart + wordLength} reason={rangeReason}");
-            LogText(operation, "WordText", fragment);
+            LogText(operation, "TypedText", typedText);
+            LogText(operation, "SuggestedSuffix", suggestedSuffix);
+            Log(operation, $"ActualReplacementRange={replacementStart}-{replacementStart + replacementLength}");
             Log(operation, $"WordDetectionMs={wordDetection.ElapsedMilliseconds}");
-            string converted = LayoutConverter.Convert(fragment, operation.SourceMap, operation.TargetMap, out _);
+            string converted = LayoutConverter.Convert(typedText, operation.SourceMap, operation.TargetMap, out _);
             Log(operation, $"ConversionSource={operation.SourceLayout.ShortName} ConversionTarget={operation.TargetLayout.ShortName}");
             LogText(operation, "Converted", converted);
-            if (LastWordLayoutOnlyCompletion.IsUnchanged(fragment, converted))
+            if (!autocomplete && LastWordLayoutOnlyCompletion.IsUnchanged(typedText, converted))
                 return LastWordLayoutOnlyCompletion.TryComplete(operation, "WindowsSearch", out result);
 
-            string expectedDocument = documentText[..wordStart] + converted + documentText[(wordStart + wordLength)..];
-            int expectedCaret = wordStart + converted.Length;
+            string replacementText = documentText.Substring(replacementStart, replacementLength);
+            string expectedDocument = documentText[..replacementStart] + converted + documentText[(replacementStart + replacementLength)..];
+            int expectedCaret = replacementStart + converted.Length;
 
             bool replaced = UiaTargetedReplacement.TryReplace(operation, target, text, target.GetRuntimeId(),
-                documentText, wordStart, wordLength, fragment, converted, expectedDocument, expectedCaret,
+                documentText, replacementStart, replacementLength, replacementText, converted, expectedDocument, expectedCaret,
                 "WindowsSearch", "WindowsSearchSuccess", out string replacementResult);
             result = MapReplacementResult(replacementResult);
+            Log(operation, $"ReplacementVerified={replaced}");
             if (replaced && result == "WindowsSearchSuccess")
+            {
                 Log(operation, "LayoutSwitchVerified=True");
+                LogFinalState(operation, text);
+            }
             return replaced;
         }
         catch (ElementNotAvailableException) { result = "WindowsSearchFocusChanged"; return false; }
@@ -244,6 +288,45 @@ internal static class WindowsSearchLastWordHandler
         return TryResolveWordRange(text, caret, resolvedDirection, out start, out length, out reason);
     }
 
+    // UIA exposes no dedicated autocomplete flag here. Only the narrow selected-suffix
+    // signature observed in Windows Search is accepted; every other non-empty selection
+    // is rejected safely by the caller instead of being rewritten.
+    internal static bool TryDetectAutocomplete(string text, int selectionStart, int selectionEnd,
+        out int typedStart, out int suggestedEnd, out string reason)
+    {
+        typedStart = suggestedEnd = 0;
+        reason = "SelectionIsDegenerate";
+        if (selectionStart == selectionEnd) return false;
+        if (selectionStart <= 0 || selectionEnd <= selectionStart || selectionEnd > text.Length)
+        {
+            reason = "SelectionOutOfRange";
+            return false;
+        }
+        if (char.IsWhiteSpace(text[selectionStart - 1]))
+        {
+            reason = "NoTypedPrefixBeforeSelection";
+            return false;
+        }
+        if (selectionEnd < text.Length && !char.IsWhiteSpace(text[selectionEnd]))
+        {
+            reason = "SelectionDoesNotEndAtWordBoundary";
+            return false;
+        }
+        for (int index = selectionStart; index < selectionEnd; index++)
+        {
+            if (char.IsWhiteSpace(text[index]))
+            {
+                reason = "SelectedSuffixContainsWhitespace";
+                return false;
+            }
+        }
+        typedStart = selectionStart;
+        while (typedStart > 0 && !char.IsWhiteSpace(text[typedStart - 1])) typedStart--;
+        suggestedEnd = selectionEnd;
+        reason = "SelectedSuffixFromCaretToWordBoundary";
+        return true;
+    }
+
     private static bool TryResolveWordRange(string text, int caret, TextDirection direction,
         out int start, out int length, out string reason)
     {
@@ -332,6 +415,23 @@ internal static class WindowsSearchLastWordHandler
         TextPatternRange prefix = text.DocumentRange.Clone();
         prefix.MoveEndpointByRange(TextPatternRangeEndpoint.End, range, endpoint);
         return prefix.GetText(-1).Length;
+    }
+
+    private static void LogFinalState(TextReplacementOperation operation, TextPattern text)
+    {
+        try
+        {
+            LogText(operation, "FinalDocumentText", text.DocumentRange.GetText(-1));
+            TextPatternRange[] selection = text.GetSelection();
+            int caret = selection.Length == 1 &&
+                selection[0].CompareEndpoints(TextPatternRangeEndpoint.Start, selection[0], TextPatternRangeEndpoint.End) == 0
+                ? Offset(text, selection[0], TextPatternRangeEndpoint.Start) : -1;
+            Log(operation, $"FinalCaretOffset={caret}");
+        }
+        catch (Exception ex)
+        {
+            Log(operation, $"FinalStateUnavailable={ex.GetType().Name}");
+        }
     }
 
     private static string MapPlanFailure(string reason) => reason switch

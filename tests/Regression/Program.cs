@@ -206,6 +206,17 @@ Check(WindowsSearchLastWordHandler.TryResolveWordRange("тест", 2, out int in
       insideStart == 0 && insideLength == 4 && insideDirection == "LTR" &&
       insideReason == "CaretInsideWord",
     "Windows Search expands a caret inside a word without directional movement");
+Check(WindowsSearchLastWordHandler.TryDetectAutocomplete("notepad", 4, 7, out int autocompleteTypedStart,
+        out int autocompleteSuggestedEnd, out string autocompleteReason) &&
+      autocompleteTypedStart == 0 && autocompleteSuggestedEnd == 7 &&
+      autocompleteReason == "SelectedSuffixFromCaretToWordBoundary",
+    "Windows Search recognizes a selected autocomplete suffix");
+Check(!WindowsSearchLastWordHandler.TryDetectAutocomplete("notepad", 4, 6, out _, out _,
+        out string partialSuggestionReason) && partialSuggestionReason == "SelectionDoesNotEndAtWordBoundary",
+    "Windows Search rejects a partial selected suffix as autocomplete");
+Check(!WindowsSearchLastWordHandler.TryDetectAutocomplete("note pad", 4, 8, out _, out _,
+        out string whitespaceSuggestionReason) && whitespaceSuggestionReason == "SelectedSuffixContainsWhitespace",
+    "Windows Search rejects a whitespace-containing selection as autocomplete");
 const int WmKeyDown = 0x0100;
 const int WmKeyUp = 0x0101;
 const int WmSysKeyDown = 0x0104;
