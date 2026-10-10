@@ -249,6 +249,12 @@ Check(NativeEditLastWordService.ResolveHandler("Notepad++", "Scintilla", true, t
       NativeEditLastWordService.ResolveHandler("Notepad++", "Scintilla", false, true, out _) ==
       NativeEditLastWordService.NativeHandler.Unsupported,
     "Notepad++ Scintilla routing requires same-process owned focus");
+Check(NativeEditLastWordService.ResolveHandler("OpusApp", "_WwG", true, true, out string wordRouteReason) ==
+      NativeEditLastWordService.NativeHandler.MicrosoftWordProbe &&
+      wordRouteReason == "MicrosoftWordDocumentFocusRequiresApiConfirmation" &&
+      NativeEditLastWordService.ResolveHandler("OpusApp", "_WwG", false, true, out _) ==
+      NativeEditLastWordService.NativeHandler.Unsupported,
+    "Microsoft Word routing requires same-process owned document focus");
 const int WmKeyDown = 0x0100;
 const int WmKeyUp = 0x0101;
 const int WmSysKeyDown = 0x0104;

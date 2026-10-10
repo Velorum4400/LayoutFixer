@@ -94,6 +94,12 @@ internal static class NativeEditLastWordService
                 focusedPid, out string scintillaResult);
             return End(operation, completed ? scintillaResult : "Aborted", $"reason={scintillaResult}", timer);
         }
+        if (handler == NativeHandler.MicrosoftWordProbe)
+        {
+            _ = MicrosoftWordLastWordProbe.Probe(operation, target, focusedControl, targetPid, focusedPid,
+                out string wordResult);
+            return End(operation, "Aborted", $"reason={wordResult}", timer);
+        }
         if (!supported)
             return End(operation, "Unsupported", $"reason=FocusedControlClassNotSupported className=\"{Escape(className)}\"", timer);
 
@@ -190,6 +196,11 @@ internal static class NativeEditLastWordService
         {
             reason = "NotepadPlusPlusScintillaFocus";
             return NativeHandler.Scintilla;
+        }
+        if (foregroundClass == "OpusApp" && focusedClass == "_WwG" && sameProcess && focusedBelongsToForeground)
+        {
+            reason = "MicrosoftWordDocumentFocusRequiresApiConfirmation";
+            return NativeHandler.MicrosoftWordProbe;
         }
         bool chromiumForeground = foregroundClass == "Chrome_WidgetWin_1";
         bool chromiumFocus = focusedClass is "Chrome_WidgetWin_1" or "Chrome_RenderWidgetHostHWND";
@@ -399,7 +410,7 @@ internal static class NativeEditLastWordService
     private static void Log(TextReplacementOperation operation, string message) =>
         DiagnosticLogStore.Write($"operation={operation.Id:N} {message}");
 
-    internal enum NativeHandler { Unsupported, Edit, RichEdit, ChromiumProbe, WindowsSearchProbe, MicrosoftStore, Scintilla }
+    internal enum NativeHandler { Unsupported, Edit, RichEdit, ChromiumProbe, WindowsSearchProbe, MicrosoftStore, Scintilla, MicrosoftWordProbe }
 
     private readonly record struct HostedCoreWindowRelationship(bool ForegroundIsApplicationFrame,
         bool FocusedWindowIsCoreWindow, bool IsChildOfForeground, bool EnumeratedChildOfForeground,
