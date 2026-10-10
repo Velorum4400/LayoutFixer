@@ -235,11 +235,15 @@ Check(!WindowsSearchLastWordHandler.TryDetectValuePatternAutocomplete("notepad m
         out _, out _, out string spacedValueReason) && spacedValueReason == "SuggestedSuffixDoesNotReachDocumentEnd",
     "Windows Search rejects a ValuePattern suffix followed by whitespace");
 Check(NativeEditLastWordService.ResolveHandler("ApplicationFrameWindow", "Windows.UI.Core.CoreWindow", false,
-        false, true, out string storeRouteReason) == NativeEditLastWordService.NativeHandler.MicrosoftStoreProbe &&
+        false, true, out string storeRouteReason) == NativeEditLastWordService.NativeHandler.MicrosoftStore &&
       storeRouteReason == "VerifiedApplicationFrameHostedCoreWindowRequiresMicrosoftStoreUiaConfirmation" &&
       NativeEditLastWordService.ResolveHandler("ApplicationFrameWindow", "Windows.UI.Core.CoreWindow", false,
           false, false, out _) == NativeEditLastWordService.NativeHandler.Unsupported,
     "Microsoft Store routing requires verified cross-process CoreWindow ownership");
+Check(MicrosoftStoreLastWordHandler.IsStoreSearchBoxIdentity(true, "TextBox", "TextBox", "Search", "XAML", true, true, true) &&
+      !MicrosoftStoreLastWordHandler.IsStoreSearchBoxIdentity(true, "TextBox", "TextBox", "Search", "XAML", false, true, true) &&
+      !MicrosoftStoreLastWordHandler.IsStoreSearchBoxIdentity(true, "TextBox", "TextBox", "Other", "XAML", true, true, true),
+    "Microsoft Store handler accepts only the focused writable XAML Search TextBox");
 const int WmKeyDown = 0x0100;
 const int WmKeyUp = 0x0101;
 const int WmSysKeyDown = 0x0104;

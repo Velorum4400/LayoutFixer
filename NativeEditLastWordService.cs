@@ -82,9 +82,9 @@ internal static class NativeEditLastWordService
                 focusedPid, out string searchResult);
             return End(operation, replaced ? searchResult : "Aborted", $"reason={searchResult}", timer);
         }
-        if (handler == NativeHandler.MicrosoftStoreProbe)
+        if (handler == NativeHandler.MicrosoftStore)
         {
-            bool completed = MicrosoftStoreLastWordHandler.Probe(operation, target, focusedControl,
+            bool completed = MicrosoftStoreLastWordHandler.TryReplace(operation, target, focusedControl,
                 targetPid, focusedPid, out string storeResult);
             return End(operation, completed ? storeResult : "Aborted", $"reason={storeResult}", timer);
         }
@@ -198,7 +198,7 @@ internal static class NativeEditLastWordService
             focusedClass == "Windows.UI.Core.CoreWindow" && crossProcessFocusAccepted)
         {
             reason = "VerifiedApplicationFrameHostedCoreWindowRequiresMicrosoftStoreUiaConfirmation";
-            return NativeHandler.MicrosoftStoreProbe;
+            return NativeHandler.MicrosoftStore;
         }
         reason = !sameProcess ? "FocusedWindowDifferentProcess" : !focusedBelongsToForeground ?
             "FocusedWindowNotOwnedByForeground" : "FocusedControlClassNotSupported";
@@ -370,6 +370,7 @@ internal static class NativeEditLastWordService
         Log(operation, $"NATIVE LASTWORD END result={result}{suffix} durationMs={Milliseconds(timer)}");
         return result == "Success" || result.StartsWith("UiaWholeValueReplaced", StringComparison.Ordinal) ||
             result == "WindowsSearchSuccess" || result.StartsWith("WindowsSearchReplacementSucceeded", StringComparison.Ordinal) ||
+            result == "MicrosoftStoreSuccess" || result.StartsWith("MicrosoftStoreReplacementSucceeded", StringComparison.Ordinal) ||
             result == "LayoutOnlySuccess";
     }
 
@@ -386,7 +387,7 @@ internal static class NativeEditLastWordService
     private static void Log(TextReplacementOperation operation, string message) =>
         DiagnosticLogStore.Write($"operation={operation.Id:N} {message}");
 
-    internal enum NativeHandler { Unsupported, Edit, RichEdit, ChromiumProbe, WindowsSearchProbe, MicrosoftStoreProbe }
+    internal enum NativeHandler { Unsupported, Edit, RichEdit, ChromiumProbe, WindowsSearchProbe, MicrosoftStore }
 
     private readonly record struct HostedCoreWindowRelationship(bool ForegroundIsApplicationFrame,
         bool FocusedWindowIsCoreWindow, bool IsChildOfForeground, bool EnumeratedChildOfForeground,
