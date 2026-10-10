@@ -88,6 +88,12 @@ internal static class NativeEditLastWordService
                 targetPid, focusedPid, out string storeResult);
             return End(operation, completed ? storeResult : "Aborted", $"reason={storeResult}", timer);
         }
+        if (handler == NativeHandler.Scintilla)
+        {
+            bool completed = ScintillaLastWordHandler.TryReplace(operation, target, focusedControl,
+                focusedPid, out string scintillaResult);
+            return End(operation, completed ? scintillaResult : "Aborted", $"reason={scintillaResult}", timer);
+        }
         if (!supported)
             return End(operation, "Unsupported", $"reason=FocusedControlClassNotSupported className=\"{Escape(className)}\"", timer);
 
@@ -180,6 +186,11 @@ internal static class NativeEditLastWordService
     {
         if (focusedClass == "Edit") { reason = "NativeEditFocus"; return NativeHandler.Edit; }
         if (focusedClass == "RichEditD2DPT") { reason = "NativeRichEditFocus"; return NativeHandler.RichEdit; }
+        if (foregroundClass == "Notepad++" && focusedClass == "Scintilla" && sameProcess && focusedBelongsToForeground)
+        {
+            reason = "NotepadPlusPlusScintillaFocus";
+            return NativeHandler.Scintilla;
+        }
         bool chromiumForeground = foregroundClass == "Chrome_WidgetWin_1";
         bool chromiumFocus = focusedClass is "Chrome_WidgetWin_1" or "Chrome_RenderWidgetHostHWND";
         if (chromiumForeground && chromiumFocus && sameProcess && focusedBelongsToForeground)
@@ -371,6 +382,7 @@ internal static class NativeEditLastWordService
         return result == "Success" || result.StartsWith("UiaWholeValueReplaced", StringComparison.Ordinal) ||
             result == "WindowsSearchSuccess" || result.StartsWith("WindowsSearchReplacementSucceeded", StringComparison.Ordinal) ||
             result == "MicrosoftStoreSuccess" || result.StartsWith("MicrosoftStoreReplacementSucceeded", StringComparison.Ordinal) ||
+            result == "ScintillaSuccess" || result.StartsWith("ScintillaReplacementSucceeded", StringComparison.Ordinal) ||
             result == "LayoutOnlySuccess";
     }
 
@@ -387,7 +399,7 @@ internal static class NativeEditLastWordService
     private static void Log(TextReplacementOperation operation, string message) =>
         DiagnosticLogStore.Write($"operation={operation.Id:N} {message}");
 
-    internal enum NativeHandler { Unsupported, Edit, RichEdit, ChromiumProbe, WindowsSearchProbe, MicrosoftStore }
+    internal enum NativeHandler { Unsupported, Edit, RichEdit, ChromiumProbe, WindowsSearchProbe, MicrosoftStore, Scintilla }
 
     private readonly record struct HostedCoreWindowRelationship(bool ForegroundIsApplicationFrame,
         bool FocusedWindowIsCoreWindow, bool IsChildOfForeground, bool EnumeratedChildOfForeground,

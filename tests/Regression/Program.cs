@@ -244,6 +244,11 @@ Check(MicrosoftStoreLastWordHandler.IsStoreSearchBoxIdentity(true, "TextBox", "T
       !MicrosoftStoreLastWordHandler.IsStoreSearchBoxIdentity(true, "TextBox", "TextBox", "Search", "XAML", false, true, true) &&
       !MicrosoftStoreLastWordHandler.IsStoreSearchBoxIdentity(true, "TextBox", "TextBox", "Other", "XAML", true, true, true),
     "Microsoft Store handler accepts only the focused writable XAML Search TextBox");
+Check(NativeEditLastWordService.ResolveHandler("Notepad++", "Scintilla", true, true, out string scintillaRouteReason) ==
+      NativeEditLastWordService.NativeHandler.Scintilla && scintillaRouteReason == "NotepadPlusPlusScintillaFocus" &&
+      NativeEditLastWordService.ResolveHandler("Notepad++", "Scintilla", false, true, out _) ==
+      NativeEditLastWordService.NativeHandler.Unsupported,
+    "Notepad++ Scintilla routing requires same-process owned focus");
 const int WmKeyDown = 0x0100;
 const int WmKeyUp = 0x0101;
 const int WmSysKeyDown = 0x0104;
