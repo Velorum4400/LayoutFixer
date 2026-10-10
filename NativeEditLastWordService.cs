@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Windows.Automation;
 
 namespace LayoutFixer;
 
@@ -39,7 +41,12 @@ internal static class NativeEditLastWordService
         string className = GetWindowClassName(focusedControl);
         bool sameProcess = focusedPid == targetPid;
         bool focusedBelongsToForeground = sameProcess && BelongsToForeground(target, focusedControl);
+        HostedCoreWindowRelationship hostedCoreWindow = InspectHostedCoreWindow(target, focusedControl,
+            foregroundClass, className);
+        bool crossProcessFocusAccepted = !sameProcess && hostedCoreWindow.OwnershipVerified;
+        bool focusAccepted = sameProcess ? focusedBelongsToForeground : crossProcessFocusAccepted;
         NativeHandler handler = ResolveHandler(foregroundClass, className, sameProcess, focusedBelongsToForeground,
+            crossProcessFocusAccepted,
             out string routingReason);
         bool supported = handler != NativeHandler.Unsupported;
         Log(operation, $"NativeLastWord foregroundWindow=0x{GetForegroundWindow().ToInt64():X}");
@@ -50,11 +57,20 @@ internal static class NativeEditLastWordService
         Log(operation, $"NativeLastWord focusedClass=\"{Escape(className)}\"");
         Log(operation, $"NativeLastWord sameProcess={sameProcess}");
         Log(operation, $"NativeLastWord focusedBelongsToForeground={focusedBelongsToForeground}");
+        Log(operation, $"ForegroundIsApplicationFrame={hostedCoreWindow.ForegroundIsApplicationFrame}");
+        Log(operation, $"FocusedWindowIsCoreWindow={hostedCoreWindow.FocusedWindowIsCoreWindow}");
+        Log(operation, $"FocusedWindowIsChildOfForeground={hostedCoreWindow.IsChildOfForeground}");
+        Log(operation, $"FocusedWindowOwnershipVerified={hostedCoreWindow.OwnershipVerified}");
+        Log(operation, $"CrossProcessFocusAccepted={crossProcessFocusAccepted}");
+        Log(operation, $"NativeLastWord ownershipEvidence={hostedCoreWindow.Evidence}");
         Log(operation, $"NativeLastWord supported={supported}");
         Log(operation, $"NativeLastWord handler={handler}");
         Log(operation, $"NativeLastWord routingReason={routingReason}");
-        if (focusedControl == IntPtr.Zero || !IsWindow(focusedControl) || focusedPid != targetPid)
+        if (focusedControl == IntPtr.Zero || !IsWindow(focusedControl) || !focusAccepted)
             return End(operation, "Failed", "stage=GetFocusedControl reason=FocusedControlDoesNotMatchTarget", timer);
+        if (GetForegroundWindow() != target || !TryGetFocusedControl(targetTid, out IntPtr recheckedFocus) ||
+            recheckedFocus != focusedControl)
+            return End(operation, "Failed", "stage=GetFocusedControl reason=FocusChangedDuringRouting", timer);
         if (handler == NativeHandler.ChromiumProbe)
         {
             bool replaced = UiaLastWordProbe.Run(operation, out string uiaResult);
@@ -65,6 +81,12 @@ internal static class NativeEditLastWordService
             bool replaced = WindowsSearchLastWordHandler.TryReplace(operation, target, targetPid, focusedControl,
                 focusedPid, out string searchResult);
             return End(operation, replaced ? searchResult : "Aborted", $"reason={searchResult}", timer);
+        }
+        if (handler == NativeHandler.MicrosoftStoreProbe)
+        {
+            bool completed = MicrosoftStoreLastWordHandler.Probe(operation, target, focusedControl,
+                targetPid, focusedPid, out string storeResult);
+            return End(operation, completed ? storeResult : "Aborted", $"reason={storeResult}", timer);
         }
         if (!supported)
             return End(operation, "Unsupported", $"reason=FocusedControlClassNotSupported className=\"{Escape(className)}\"", timer);
@@ -150,7 +172,11 @@ internal static class NativeEditLastWordService
     }
 
     internal static NativeHandler ResolveHandler(string foregroundClass, string focusedClass, bool sameProcess,
-        bool focusedBelongsToForeground, out string reason)
+        bool focusedBelongsToForeground, out string reason) => ResolveHandler(foregroundClass, focusedClass,
+            sameProcess, focusedBelongsToForeground, false, out reason);
+
+    internal static NativeHandler ResolveHandler(string foregroundClass, string focusedClass, bool sameProcess,
+        bool focusedBelongsToForeground, bool crossProcessFocusAccepted, out string reason)
     {
         if (focusedClass == "Edit") { reason = "NativeEditFocus"; return NativeHandler.Edit; }
         if (focusedClass == "RichEditD2DPT") { reason = "NativeRichEditFocus"; return NativeHandler.RichEdit; }
@@ -168,6 +194,12 @@ internal static class NativeEditLastWordService
             reason = "CoreWindowCandidateRequiresWindowsSearchUiaConfirmation";
             return NativeHandler.WindowsSearchProbe;
         }
+        if (foregroundClass == "ApplicationFrameWindow" &&
+            focusedClass == "Windows.UI.Core.CoreWindow" && crossProcessFocusAccepted)
+        {
+            reason = "VerifiedApplicationFrameHostedCoreWindowRequiresMicrosoftStoreUiaConfirmation";
+            return NativeHandler.MicrosoftStoreProbe;
+        }
         reason = !sameProcess ? "FocusedWindowDifferentProcess" : !focusedBelongsToForeground ?
             "FocusedWindowNotOwnedByForeground" : "FocusedControlClassNotSupported";
         return NativeHandler.Unsupported;
@@ -176,6 +208,66 @@ internal static class NativeEditLastWordService
     private static bool BelongsToForeground(IntPtr foreground, IntPtr focused) =>
         foreground != IntPtr.Zero && focused != IntPtr.Zero &&
         (foreground == focused || IsChild(foreground, focused) || GetAncestor(focused, 2) == foreground);
+
+    private static HostedCoreWindowRelationship InspectHostedCoreWindow(IntPtr foreground, IntPtr focused,
+        string foregroundClass, string focusedClass)
+    {
+        bool applicationFrame = foregroundClass == "ApplicationFrameWindow";
+        bool coreWindow = focusedClass == "Windows.UI.Core.CoreWindow";
+        if (!applicationFrame || !coreWindow)
+            return new HostedCoreWindowRelationship(applicationFrame, coreWindow, false, false, false, false,
+                "ClassPairNotApplicable");
+
+        bool directChild = IsChild(foreground, focused);
+        bool enumeratedChild = ContainsChildWindow(foreground, focused);
+        bool ancestor = GetAncestor(focused, 1) == foreground || GetAncestor(focused, 2) == foreground ||
+            GetAncestor(focused, 3) == foreground;
+        bool owner = HasOwnerRelation(foreground, focused);
+        bool uiaAncestor = HasUiaForegroundAncestor(foreground);
+        bool verified = directChild || enumeratedChild || ancestor || owner || uiaAncestor;
+        string evidence = $"IsChild={directChild};EnumChildWindows={enumeratedChild};GetAncestor={ancestor};GetWindowOwner={owner};UiaAncestor={uiaAncestor}";
+        return new HostedCoreWindowRelationship(applicationFrame, coreWindow, directChild, enumeratedChild,
+            ancestor || owner || uiaAncestor, verified, evidence);
+    }
+
+    private static bool ContainsChildWindow(IntPtr parent, IntPtr expected)
+    {
+        bool found = false;
+        EnumChildWindows(parent, (child, _) =>
+        {
+            if (child != expected) return true;
+            found = true;
+            return false;
+        }, IntPtr.Zero);
+        return found;
+    }
+
+    private static bool HasOwnerRelation(IntPtr foreground, IntPtr focused)
+    {
+        IntPtr current = focused;
+        for (int index = 0; index < 8 && current != IntPtr.Zero; index++)
+        {
+            current = GetWindow(current, 4); // GW_OWNER
+            if (current == foreground) return true;
+        }
+        return false;
+    }
+
+    private static bool HasUiaForegroundAncestor(IntPtr foreground)
+    {
+        try
+        {
+            AutomationElement? current = AutomationElement.FocusedElement;
+            for (int depth = 0; current != null && depth < 16; depth++)
+            {
+                object value = current.GetCurrentPropertyValue(AutomationElement.NativeWindowHandleProperty, true);
+                if (value is int hwnd && new IntPtr(hwnd) == foreground) return true;
+                current = TreeWalker.RawViewWalker.GetParent(current);
+            }
+        }
+        catch { }
+        return false;
+    }
 
     private static bool TryGetSelection(IntPtr edit, NativeHandler handler, out int start, out int end)
     {
@@ -294,7 +386,11 @@ internal static class NativeEditLastWordService
     private static void Log(TextReplacementOperation operation, string message) =>
         DiagnosticLogStore.Write($"operation={operation.Id:N} {message}");
 
-    internal enum NativeHandler { Unsupported, Edit, RichEdit, ChromiumProbe, WindowsSearchProbe }
+    internal enum NativeHandler { Unsupported, Edit, RichEdit, ChromiumProbe, WindowsSearchProbe, MicrosoftStoreProbe }
+
+    private readonly record struct HostedCoreWindowRelationship(bool ForegroundIsApplicationFrame,
+        bool FocusedWindowIsCoreWindow, bool IsChildOfForeground, bool EnumeratedChildOfForeground,
+        bool AdditionalOwnershipEvidence, bool OwnershipVerified, string Evidence);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct GUITHREADINFO
@@ -309,6 +405,10 @@ internal static class NativeEditLastWordService
     [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr window);
     [DllImport("user32.dll")] private static extern bool IsChild(IntPtr parent, IntPtr child);
     [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr window, uint flags);
+    [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr window, uint command);
+    private delegate bool EnumWindowsCallback(IntPtr window, IntPtr parameter);
+    [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent,
+        EnumWindowsCallback callback, IntPtr parameter);
     [DllImport("user32.dll", SetLastError = true)] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
     [DllImport("user32.dll", SetLastError = true)] private static extern bool GetGUIThreadInfo(uint threadId, ref GUITHREADINFO info);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern int GetClassName(IntPtr window, StringBuilder className, int maxCount);

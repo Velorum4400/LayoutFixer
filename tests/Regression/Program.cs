@@ -234,6 +234,12 @@ Check(!WindowsSearchLastWordHandler.TryDetectValuePatternAutocomplete("notepad",
 Check(!WindowsSearchLastWordHandler.TryDetectValuePatternAutocomplete("notepad more", "note", 4,
         out _, out _, out string spacedValueReason) && spacedValueReason == "SuggestedSuffixDoesNotReachDocumentEnd",
     "Windows Search rejects a ValuePattern suffix followed by whitespace");
+Check(NativeEditLastWordService.ResolveHandler("ApplicationFrameWindow", "Windows.UI.Core.CoreWindow", false,
+        false, true, out string storeRouteReason) == NativeEditLastWordService.NativeHandler.MicrosoftStoreProbe &&
+      storeRouteReason == "VerifiedApplicationFrameHostedCoreWindowRequiresMicrosoftStoreUiaConfirmation" &&
+      NativeEditLastWordService.ResolveHandler("ApplicationFrameWindow", "Windows.UI.Core.CoreWindow", false,
+          false, false, out _) == NativeEditLastWordService.NativeHandler.Unsupported,
+    "Microsoft Store routing requires verified cross-process CoreWindow ownership");
 const int WmKeyDown = 0x0100;
 const int WmKeyUp = 0x0101;
 const int WmSysKeyDown = 0x0104;
