@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Reflection;
 using System.Windows.Automation;
 using System.Windows.Automation.Text;
 
@@ -52,6 +53,7 @@ internal static class WindowsSearchLastWordHandler
             int caret = selectionStart;
             if (caret < 0 || caret > documentText.Length) { result = "WindowsSearchCaretUnavailable"; return false; }
             Log(operation, $"CaretOffset={caret} CaretReadMs={caretRead.ElapsedMilliseconds}");
+            LogAutocompleteSnapshot(operation, target, text, documentText, caret, selectionStart, selectionEnd);
 
             var wordDetection = Stopwatch.StartNew();
             TextDirection direction = DetectTextDirection(documentText, caret);
@@ -409,6 +411,80 @@ internal static class WindowsSearchLastWordHandler
     }
 
     private enum TextDirection { LTR, RTL }
+
+    private static void LogAutocompleteSnapshot(TextReplacementOperation operation, AutomationElement target,
+        TextPattern text, string documentText, int caret, int selectionStart, int selectionEnd)
+    {
+        try
+        {
+            bool hasValue = TryPattern(target, ValuePattern.Pattern, out ValuePattern? value) && value != null;
+            string valueText = hasValue ? value!.Current.Value ?? string.Empty : string.Empty;
+            Log(operation, $"AutocompleteSnapshot ValuePatternAvailable={hasValue} ValueLength={valueText.Length} ValueMatchesDocument={hasValue && string.Equals(valueText, documentText, StringComparison.Ordinal)}");
+            if (hasValue) LogText(operation, "ValuePatternText", valueText);
+
+            int suffixEnd = caret;
+            while (suffixEnd < documentText.Length && !char.IsWhiteSpace(documentText[suffixEnd])) suffixEnd++;
+            Log(operation, $"AutocompleteSnapshot CandidateSuffixRange={caret}-{suffixEnd} CandidateSuffixLength={suffixEnd - caret}");
+            LogRangeAttributes(operation, "Document", text.DocumentRange);
+            LogRangeAttributes(operation, "TypedPrefix", CreateRange(text, 0, caret));
+            LogRangeAttributes(operation, "Caret", CreateRange(text, caret, 0));
+            LogRangeAttributes(operation, "CandidateSuffix", CreateRange(text, caret, suffixEnd - caret));
+            if (selectionStart != selectionEnd)
+                LogRangeAttributes(operation, "Selection", CreateRange(text, selectionStart, selectionEnd - selectionStart));
+        }
+        catch (Exception ex)
+        {
+            Log(operation, $"AutocompleteSnapshotUnavailable={ex.GetType().Name}");
+        }
+    }
+
+    private static TextPatternRange CreateRange(TextPattern text, int start, int length)
+    {
+        TextPatternRange document = text.DocumentRange;
+        TextPatternRange range = document.Clone();
+        range.MoveEndpointByRange(TextPatternRangeEndpoint.End, document, TextPatternRangeEndpoint.Start);
+        if (start > 0) range.Move(TextUnit.Character, start);
+        if (length > 0) range.MoveEndpointByUnit(TextPatternRangeEndpoint.End, TextUnit.Character, length);
+        return range;
+    }
+
+    private static void LogRangeAttributes(TextReplacementOperation operation, string rangeName,
+        TextPatternRange range)
+    {
+        string[] attributes =
+        {
+            "IsHiddenAttribute", "IsItalicAttribute", "FontWeightAttribute", "FontSizeAttribute",
+            "ForegroundColorAttribute", "BackgroundColorAttribute", "CultureAttribute", "IsReadOnlyAttribute"
+        };
+        var values = new List<string>();
+        foreach (string attributeName in attributes)
+        {
+            try
+            {
+                FieldInfo? field = typeof(TextPattern).GetField(attributeName,
+                    BindingFlags.Public | BindingFlags.Static);
+                if (field?.GetValue(null) is not AutomationTextAttribute attribute)
+                {
+                    values.Add(attributeName + "=Unavailable");
+                    continue;
+                }
+                object value = range.GetAttributeValue(attribute);
+                values.Add(attributeName + "=" + FormatAttributeValue(value));
+            }
+            catch (Exception ex)
+            {
+                values.Add(attributeName + "=" + ex.GetType().Name);
+            }
+        }
+        Log(operation, $"AutocompleteSnapshot {rangeName}Attributes=[{string.Join(", ", values)}]");
+    }
+
+    private static string FormatAttributeValue(object value)
+    {
+        if (ReferenceEquals(value, AutomationElement.NotSupported)) return "NotSupported";
+        if (ReferenceEquals(value, TextPattern.MixedAttributeValue)) return "Mixed";
+        return value?.ToString() ?? "null";
+    }
 
     private static int Offset(TextPattern text, TextPatternRange range, TextPatternRangeEndpoint endpoint)
     {
